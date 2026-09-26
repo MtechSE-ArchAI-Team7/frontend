@@ -8,7 +8,7 @@ readonly repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ui_root="${repository_root}/agent3"
 readonly python_executable="${repository_root}/.venv/bin/python"
 
-for command_name in aws curl zip; do
+for command_name in aws curl uv zip; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Required deployment command is unavailable: ${command_name}" >&2
     exit 1
@@ -60,15 +60,11 @@ previous_code_url="$(
 )"
 curl --fail --silent --show-error "$previous_code_url" --output "$previous_archive"
 
-"$python_executable" -m pip install \
-  --disable-pip-version-check \
-  --ignore-installed \
+uv pip install \
   --quiet \
-  --no-compile \
   --only-binary=:all: \
-  --implementation cp \
   --python-version 3.12 \
-  --platform manylinux2014_aarch64 \
+  --python-platform aarch64-manylinux2014 \
   --requirement "${ui_root}/backend/requirements.txt" \
   --target "$package_dir"
 cp "${ui_root}/backend/handler.py" "${package_dir}/handler.py"
