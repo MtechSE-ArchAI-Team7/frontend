@@ -47,7 +47,7 @@ export default function App() {
   return (
     <div className="console-root">
       <header className="utility-header">
-        <a className="product-brand" href="#overview" aria-label="AIOS Operations home" onClick={goHome}>
+        <a className="product-brand" href="#runs" aria-label="AIOS Operations home" onClick={goHome}>
           <span className="product-mark">A</span>
           <span>AIOS Operations</span>
         </a>

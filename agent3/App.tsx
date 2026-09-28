@@ -22,13 +22,15 @@ const AGENT_CONFIG = {
 } as const;
 
 const CONSOLE_TABS = [
-  { id: "run", label: "Run Console" },
   { id: "runs", label: "Runs" },
+  { id: "manual", label: "Manual Run" },
   { id: "agent", label: "Agent" },
   { id: "status", label: "System Status" },
 ] as const;
 
 type ConsoleTab = (typeof CONSOLE_TABS)[number]["id"];
+type RunsView = "list" | "detail";
+type RunSection = "overview" | "workflow" | "approval" | "explainability" | "results";
 
 const WORKFLOW_STEPS = [
   ["Handoff", "Diagnosis accepted"],
@@ -210,7 +212,6 @@ function ExplainabilityPanel({ trace }: { trace: ExplainabilityTrace }) {
         <div>
           <span className="section-kicker">Auditable decision trace</span>
           <h2>Agent explainability</h2>
-          <p>Shows bounded summaries and recorded actions—not private reasoning tokens or raw prompts.</p>
         </div>
         <span className="identifier-badge">TRACE V{trace.schema_version}</span>
       </header>
@@ -226,7 +227,7 @@ function ExplainabilityPanel({ trace }: { trace: ExplainabilityTrace }) {
       <div className="explainability-body">
         <article className="trace-panel memory-panel" aria-label="Incident memory">
           <header>
-            <div><h3>Historical incident memory</h3><p>Advisory suggestions only; current commit evidence remains authoritative.</p></div>
+            <div><h3>Historical incident memory</h3></div>
             <span className={`status-badge ${statusTone(memory?.status ?? "DISABLED")}`}>{memory?.status ?? "DISABLED"}</span>
           </header>
           {memory?.status === "RETRIEVED" ? (
@@ -253,7 +254,6 @@ function ExplainabilityPanel({ trace }: { trace: ExplainabilityTrace }) {
             <div><dt>Accepted matches</dt><dd>{memory?.matches.length ?? 0}</dd></div>
             <div><dt>Final write</dt><dd><span className={`status-badge ${statusTone(memoryWrite?.status ?? "NOT_ELIGIBLE")}`}>{displayStatus(memoryWrite?.status ?? "NOT_ELIGIBLE")}</span></dd></div>
           </dl>
-          <p className="memory-warning">Memory cannot authorize paths or tools, replace repository inspection, reuse a patch, or bypass policy and validation.</p>
         </article>
 
         <h3>Workflow decision flow</h3>
@@ -313,27 +313,29 @@ function ExplainabilityPanel({ trace }: { trace: ExplainabilityTrace }) {
           )}
         </div>
 
-        <div className="explainability-grid">
-          <article className="trace-panel">
-            <header><div><h3>Inspection tool-call flow</h3><p>Model choice followed by policy-bounded MCP execution.</p></div><span className="count-badge">{trace.inspection_tool_calls.length}</span></header>
-            {trace.inspection_tool_calls.length === 0 ? <p className="empty-state">No inspection calls recorded yet.</p> : (
-              <ol className="tool-flow">
-                {trace.inspection_tool_calls.map((call, index) => (
-                  <li key={call.call_id}>
-                    <span className="tool-sequence">{index + 1}</span>
-                    <div>
-                      <div className="event-heading"><code>{call.tool_name}</code><span className={`status-badge ${statusTone(call.status)}`}>{call.status}</span></div>
-                      <p>{formatArguments(call.arguments)}</p>
-                      <small>Result {shortDigest(call.result_digest)}</small>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </article>
+        <div className={`explainability-grid ${selectedStage === "inspection" ? "" : "single-panel"}`}>
+          {selectedStage === "inspection" && (
+            <article className="trace-panel">
+              <header><div><h3>Inspection tool-call flow</h3></div><span className="count-badge">{trace.inspection_tool_calls.length}</span></header>
+              {trace.inspection_tool_calls.length === 0 ? <p className="empty-state">No inspection calls recorded yet.</p> : (
+                <ol className="tool-flow">
+                  {trace.inspection_tool_calls.map((call, index) => (
+                    <li key={call.call_id}>
+                      <span className="tool-sequence">{index + 1}</span>
+                      <div>
+                        <div className="event-heading"><code>{call.tool_name}</code><span className={`status-badge ${statusTone(call.status)}`}>{call.status}</span></div>
+                        <p>{formatArguments(call.arguments)}</p>
+                        <small>Result {shortDigest(call.result_digest)}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </article>
+          )}
 
           <article className="trace-panel">
-            <header><div><h3>Model decision summaries</h3><p>Provider summaries are optional and redacted.</p></div><span className="count-badge">{trace.model_calls.length}</span></header>
+            <header><div><h3>Model decision summaries</h3></div><span className="count-badge">{trace.model_calls.length}</span></header>
             {trace.model_calls.length === 0 ? <p className="empty-state">No model calls recorded yet.</p> : (
               <div className="model-call-list">
                 {trace.model_calls.map((call, index) => (
@@ -352,7 +354,7 @@ function ExplainabilityPanel({ trace }: { trace: ExplainabilityTrace }) {
         </div>
 
         <article className="trace-panel validation-boundary-panel">
-          <header><div><h3>Validation execution boundary</h3><p>Typed proof from the sandbox adapter, without raw session identifiers.</p></div><span className="count-badge">{validationExecutions.length}</span></header>
+          <header><div><h3>Validation execution boundary</h3></div><span className="count-badge">{validationExecutions.length}</span></header>
           {validationExecutions.length === 0 ? <p className="empty-state">No typed validation-execution evidence is available for this run.</p> : (
             <div className="validation-execution-list">
               {validationExecutions.map((execution) => (
@@ -394,7 +396,9 @@ interface Agent3AppProps {
 }
 
 export default function App({ homeSignal = 0 }: Agent3AppProps) {
-  const [activeTab, setActiveTab] = useState<ConsoleTab>("run");
+  const [activeTab, setActiveTab] = useState<ConsoleTab>("runs");
+  const [runsView, setRunsView] = useState<RunsView>("list");
+  const [activeRunSection, setActiveRunSection] = useState<RunSection>("overview");
   const [handoffText, setHandoffText] = useState(JSON.stringify(divisionByZero, null, 2));
   const [runId, setRunId] = useState(() => localStorage.getItem(RUN_STORAGE_KEY) ?? "");
   const [run, setRun] = useState<RemediationRunView | null>(null);
@@ -406,12 +410,12 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
   const [historyError, setHistoryError] = useState("");
   const [historyBusy, setHistoryBusy] = useState<string | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<{ artifact: ArtifactRef; trigger: HTMLElement } | null>(null);
-  const [reviewer, setReviewer] = useState("Arabasta");
-  const [comment, setComment] = useState("Approved for the AgentCore demonstration.");
-  const tabRefs = useRef<Record<ConsoleTab, HTMLButtonElement | null>>({ run: null, runs: null, agent: null, status: null });
+  const [reviewer, setReviewer] = useState("Kei Yam");
+  const [comment, setComment] = useState("Approved");
+  const tabRefs = useRef<Record<ConsoleTab, HTMLButtonElement | null>>({ runs: null, manual: null, agent: null, status: null });
 
   useEffect(() => {
-    if (activeTab !== "runs") return undefined;
+    if (activeTab !== "runs" || runsView !== "list") return undefined;
     let active = true;
     setHistoryBusy("__list__");
     void listRuns()
@@ -424,10 +428,14 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
       .catch((caught: unknown) => { if (active) setHistoryError(errorMessage(caught)); })
       .finally(() => { if (active) setHistoryBusy(null); });
     return () => { active = false; };
-  }, [activeTab]);
+  }, [activeTab, runsView]);
 
   useEffect(() => {
-    if (homeSignal > 0) setActiveTab("run");
+    if (homeSignal > 0) {
+      setActiveTab("runs");
+      setRunsView("list");
+      setActiveRunSection("overview");
+    }
   }, [homeSignal]);
 
   const parsedHandoff = useMemo(() => {
@@ -468,6 +476,9 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
       localStorage.setItem(RUN_STORAGE_KEY, response.output.task_id);
       localStorage.setItem(`${RUN_STORAGE_KEY}:session`, response.output.session_id);
       await refreshRunHistory();
+      setActiveRunSection("overview");
+      setRunsView("detail");
+      setActiveTab("runs");
     } catch (caught) {
       setRunError(errorMessage(caught));
     } finally {
@@ -487,6 +498,9 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
       if (!sessionId) throw new GatewayError("MISSING_RUNTIME_SESSION", 400);
       const response = await getRun(runId, sessionId);
       setRun(response.output);
+      setActiveRunSection("overview");
+      setRunsView("detail");
+      setActiveTab("runs");
     } catch (caught) {
       setRunError(errorMessage(caught));
     } finally {
@@ -538,7 +552,9 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
       setRunId(item.task_id);
       localStorage.setItem(RUN_STORAGE_KEY, item.task_id);
       localStorage.setItem(`${RUN_STORAGE_KEY}:session`, item.session_id);
-      setActiveTab("run");
+      setActiveRunSection("overview");
+      setRunsView("detail");
+      setActiveTab("runs");
       setBusy("run");
     }
     try {
@@ -584,6 +600,16 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
     tabRefs.current[nextTab]?.focus();
   }
 
+  function showRunsList() {
+    setRunsView("list");
+    setActiveRunSection("overview");
+  }
+
+  function scrollToRunSection(section: RunSection) {
+    setActiveRunSection(section);
+    document.getElementById(section)?.scrollIntoView({ block: "start" });
+  }
+
   return (
     <div className="agent3-root">
       <nav className="console-tabs" aria-label="Remediation console views" role="tablist">
@@ -605,19 +631,18 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
         ))}
       </nav>
 
-      <div className={`console-frame ${activeTab === "run" ? "has-service-nav" : ""}`}>
-        {activeTab === "run" && <aside className="service-nav" aria-label="Run Console sections">
+      <div className={`console-frame ${activeTab === "runs" && runsView === "detail" ? "has-service-nav" : ""}`}>
+        {activeTab === "runs" && runsView === "detail" && <aside className="service-nav" aria-label="Run Console sections">
           <div className="service-nav-title">
             <span>Run Console</span>
             <strong>Sections</strong>
           </div>
           <nav>
-            <a href="#overview" className="active">Overview</a>
-            <a href="#handoff">Handoff</a>
-            <a href="#workflow">Workflow</a>
-            {run?.approval_request && <a href="#approval">Approval</a>}
-            {run?.explainability && <a href="#explainability">Explainability</a>}
-            {result && <a href="#results">Results</a>}
+            <button type="button" className={activeRunSection === "overview" ? "active" : ""} aria-current={activeRunSection === "overview" ? "location" : undefined} onClick={() => scrollToRunSection("overview")}>Overview</button>
+            <button type="button" className={activeRunSection === "workflow" ? "active" : ""} aria-current={activeRunSection === "workflow" ? "location" : undefined} onClick={() => scrollToRunSection("workflow")}>Workflow</button>
+            {run?.approval_request && <button type="button" className={activeRunSection === "approval" ? "active" : ""} aria-current={activeRunSection === "approval" ? "location" : undefined} onClick={() => scrollToRunSection("approval")}>Approval</button>}
+            {run?.explainability && <button type="button" className={activeRunSection === "explainability" ? "active" : ""} aria-current={activeRunSection === "explainability" ? "location" : undefined} onClick={() => scrollToRunSection("explainability")}>Explainability</button>}
+            {result && <button type="button" className={activeRunSection === "results" ? "active" : ""} aria-current={activeRunSection === "results" ? "location" : undefined} onClick={() => scrollToRunSection("results")}>Results</button>}
           </nav>
           <div className="service-nav-meta">
             <span>Environment</span>
@@ -626,83 +651,32 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
         </aside>}
 
         <main className="console-main">
-          <section id="panel-run" role="tabpanel" aria-labelledby="tab-run" hidden={activeTab !== "run"}>
+          <section id="panel-runs" role="tabpanel" aria-labelledby="tab-runs" hidden={activeTab !== "runs"}>
+          <div hidden={runsView !== "detail"}>
             <nav className="breadcrumbs" aria-label="Breadcrumb">
-              <a href="#overview">AIOS</a><span>/</span><a href="#handoff">Remediation</a><span>/</span><strong>Run Console</strong>
+              <span>AIOS</span><span>/</span><button className="link-button breadcrumb-button" type="button" onClick={showRunsList}>Runs</button><span>/</span><strong>Run Console</strong>
             </nav>
 
             <section className="page-header" id="overview">
               <div>
                 <h1>Remediation console</h1>
-                <p>Create and monitor a bounded remediation run from an Agent 2 diagnosis handoff.</p>
               </div>
-              <span className={`status-badge ${statusTone(runStatus)}`}><i />{displayStatus(runStatus)}</span>
+              <div className="page-header-actions">
+                <button className="secondary" type="button" onClick={showRunsList}>Back to runs</button>
+                <span className={`status-badge ${statusTone(runStatus)}`}><i />{displayStatus(runStatus)}</span>
+              </div>
             </section>
 
-            {requestFailure && (
+            {activeTab === "runs" && runsView === "detail" && requestFailure && (
               <div className="alert error" role="alert">
                 <span className="alert-icon">!</span>
                 <div><strong>Request failed</strong><p>{requestFailure}</p></div>
               </div>
             )}
 
-            <div className="primary-grid">
-            <section className="content-card" id="handoff">
-              <header className="card-header">
-                <div><h2>Create remediation run</h2><p>Submit a typed diagnosis against an immutable repository commit.</p></div>
-                <span className="identifier-badge">CASE-ECOM-AVG-001</span>
-              </header>
-
-              <div className="card-body">
-                <h3>Diagnosis handoff</h3>
-                <dl className="property-table">
-                  <div><dt>Scenario</dt><dd>Division-by-zero average calculation</dd></div>
-                  <div><dt>Jira ticket</dt><dd><code>{divisionByZero.jira_ticket_id}</code></dd></div>
-                  <div><dt>Repository</dt><dd><code>MtechSE-ArchAI-Team7/buggy-ecommerce-demo</code></dd></div>
-                  <div><dt>Base branch</dt><dd><code>main</code></dd></div>
-                  <div><dt>Target</dt><dd><code>server.js</code></dd></div>
-                  <div>
-                    <dt>Deployed service</dt>
-                    <dd>
-                      <a href="http://aios-ecommerce.ap-southeast-1.elasticbeanstalk.com/" target="_blank" rel="noreferrer">
-                        aios-ecommerce.ap-southeast-1.elasticbeanstalk.com ↗
-                      </a>
-                    </dd>
-                  </div>
-                  <div><dt>Run ID</dt><dd><code>{runId || "Generated when the run is created"}</code></dd></div>
-                </dl>
-
-                <div className="info-panel">
-                  <strong>Diagnosis</strong>
-                  <p>The average endpoint divides by zero and returns HTTP 200 with a null result instead of a typed client error.</p>
-                </div>
-
-                <details className="advanced-input">
-                  <summary>Advanced input</summary>
-                  <div>
-                    <label htmlFor="handoff-json">DiagnosisHandoffV1 JSON</label>
-                    <textarea
-                      id="handoff-json"
-                      aria-label="Diagnosis handoff JSON"
-                      spellCheck={false}
-                      value={handoffText}
-                      onChange={(event) => setHandoffText(event.target.value)}
-                    />
-                  </div>
-                </details>
-              </div>
-
-              <footer className="card-actions">
-                <button className="secondary" disabled={busy !== null || !runId} onClick={resume}>Refresh saved run</button>
-                <button className="primary" disabled={busy !== null || parsedHandoff === null} onClick={start}>
-                  {busy === "run" ? "Creating run…" : "Create remediation run"}
-                </button>
-              </footer>
-            </section>
-
             <section className="content-card" id="workflow" aria-live="polite">
               <header className="card-header">
-                <div><h2>Workflow status</h2><p>Current progress for the active runtime session.</p></div>
+                <div><h2>Workflow status</h2></div>
                 <span className={`status-badge ${statusTone(runStatus)}`}><i />{displayStatus(runStatus)}</span>
               </header>
               <div className="card-body">
@@ -724,7 +698,6 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
                 )}
               </div>
             </section>
-            </div>
 
             {run?.approval_request && (
             <section className="content-card approval-card" id="approval">
@@ -818,9 +791,9 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
               </div>
             </section>
             )}
-          </section>
+          </div>
 
-          <section id="panel-runs" role="tabpanel" aria-labelledby="tab-runs" hidden={activeTab !== "runs"}>
+          <div id="runs" hidden={runsView !== "list"}>
             <nav className="breadcrumbs" aria-label="Breadcrumb">
               <span>AIOS</span><span>/</span><span>Remediation</span><span>/</span><strong>Runs</strong>
             </nav>
@@ -873,6 +846,77 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
                   </table>
                 </div>
               )}
+            </section>
+          </div>
+          </section>
+
+          <section id="panel-manual" role="tabpanel" aria-labelledby="tab-manual" hidden={activeTab !== "manual"}>
+            <nav className="breadcrumbs" aria-label="Breadcrumb">
+              <span>AIOS</span><span>/</span><span>Remediation</span><span>/</span><strong>Manual Run</strong>
+            </nav>
+            <section className="page-header">
+              <div><h1>Manual remediation run</h1></div>
+              <span className={`status-badge ${statusTone(runStatus)}`}><i />{displayStatus(runStatus)}</span>
+            </section>
+
+            {activeTab === "manual" && requestFailure && (
+              <div className="alert error" role="alert">
+                <span className="alert-icon">!</span>
+                <div><strong>Request failed</strong><p>{requestFailure}</p></div>
+              </div>
+            )}
+
+            <section className="content-card manual-run-card" id="handoff">
+              <header className="card-header">
+                <div><h2>Create remediation run</h2><p>Submit a typed diagnosis against an immutable repository commit.</p></div>
+                <span className="identifier-badge">CASE-ECOM-AVG-001</span>
+              </header>
+
+              <div className="card-body">
+                <h3>Diagnosis handoff</h3>
+                <dl className="property-table">
+                  <div><dt>Scenario</dt><dd>Division-by-zero average calculation</dd></div>
+                  <div><dt>Jira ticket</dt><dd><code>{divisionByZero.jira_ticket_id}</code></dd></div>
+                  <div><dt>Repository</dt><dd><code>MtechSE-ArchAI-Team7/buggy-ecommerce-demo</code></dd></div>
+                  <div><dt>Base branch</dt><dd><code>main</code></dd></div>
+                  <div><dt>Target</dt><dd><code>server.js</code></dd></div>
+                  <div>
+                    <dt>Deployed service</dt>
+                    <dd>
+                      <a href="http://aios-ecommerce.ap-southeast-1.elasticbeanstalk.com/" target="_blank" rel="noreferrer">
+                        aios-ecommerce.ap-southeast-1.elasticbeanstalk.com ↗
+                      </a>
+                    </dd>
+                  </div>
+                  <div><dt>Run ID</dt><dd><code>{runId || "Generated when the run is created"}</code></dd></div>
+                </dl>
+
+                <div className="info-panel">
+                  <strong>Diagnosis</strong>
+                  <p>The average endpoint divides by zero and returns HTTP 200 with a null result instead of a typed client error.</p>
+                </div>
+
+                <details className="advanced-input">
+                  <summary>Advanced input</summary>
+                  <div>
+                    <label htmlFor="handoff-json">DiagnosisHandoffV1 JSON</label>
+                    <textarea
+                      id="handoff-json"
+                      aria-label="Diagnosis handoff JSON"
+                      spellCheck={false}
+                      value={handoffText}
+                      onChange={(event) => setHandoffText(event.target.value)}
+                    />
+                  </div>
+                </details>
+              </div>
+
+              <footer className="card-actions">
+                <button className="secondary" type="button" disabled={busy !== null || !runId} onClick={resume}>Refresh saved run</button>
+                <button className="primary" type="button" disabled={busy !== null || parsedHandoff === null} onClick={start}>
+                  {busy === "run" ? "Creating run…" : "Create remediation run"}
+                </button>
+              </footer>
             </section>
           </section>
 

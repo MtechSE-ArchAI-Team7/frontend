@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -68,19 +68,25 @@ describe("AIOS remediation console", () => {
     vi.unstubAllGlobals();
   });
 
+  function openManualRun() {
+    fireEvent.click(screen.getByRole("tab", { name: "Manual Run" }));
+  }
+
   it("starts the preloaded handoff and persists the run id", async () => {
     fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
       .mockResolvedValueOnce(response(runView("DRAFT_PR_CREATED")))
       .mockResolvedValueOnce(response(runList("DRAFT_PR_CREATED")));
     render(<App />);
 
-    expect(screen.getByRole("tab", { name: "Run Console" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
     expect(screen.getByText("Tool and policy boundary")).not.toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "Agent" }));
     expect(screen.getByText("Tool and policy boundary")).toBeInTheDocument();
     expect(screen.getByText("4", { selector: ".boundary-summary strong" })).toBeInTheDocument();
     expect(screen.getByText("13", { selector: ".boundary-summary strong" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Run Console" }));
+    openManualRun();
     expect(screen.getByText("MtechSE-ArchAI-Team7/buggy-ecommerce-demo")).toBeInTheDocument();
     expect(screen.getByText("TICKET-111")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /aios-ecommerce\.ap-southeast-1\.elasticbeanstalk\.com/ })).toHaveAttribute(
@@ -90,20 +96,23 @@ describe("AIOS remediation console", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create remediation run" }));
 
     expect((await screen.findAllByText("DRAFT PR CREATED")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Back to runs" })).toBeVisible();
     expect(localStorage.getItem("aios-remediation-ecommerce-run-id")).toBe(RUN_ID);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/runs",
       expect.objectContaining({ method: "POST", body: expect.stringContaining("CASE-ECOM-AVG-001") }),
     );
-    expect(String(fetchMock.mock.calls[0][1]?.body)).toContain("ae4d89601a5b858994ec88695d8c624ebc510750");
-    expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('"jira_ticket_id":"TICKET-111"');
+    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("ae4d89601a5b858994ec88695d8c624ebc510750");
+    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain('"jira_ticket_id":"TICKET-111"');
   });
 
   it("resumes a saved run", async () => {
     localStorage.setItem("aios-remediation-ecommerce-run-id", RUN_ID);
     localStorage.setItem("aios-remediation-ecommerce-run-id:session", RUN_ID);
-    fetchMock.mockResolvedValue(
-      response(
+    fetchMock
+      .mockResolvedValueOnce(response(runList("INTERNAL_ERROR")))
+      .mockResolvedValueOnce(response(
         runView("INTERNAL_ERROR", {
           explainability: {
             schema_version: "1.0",
@@ -126,16 +135,17 @@ describe("AIOS remediation console", () => {
             model_calls: [],
           },
         }),
-      ),
-    );
+      ));
     render(<App />);
 
+    openManualRun();
     fireEvent.click(screen.getByRole("button", { name: "Refresh saved run" }));
 
     const errorStatuses = await screen.findAllByText("INTERNAL ERROR");
     expect(errorStatuses.length).toBeGreaterThan(0);
     expect(errorStatuses.some((item) => item.classList.contains("error"))).toBe(true);
     expect(screen.getByText("failed", { selector: ".step-status" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/runs/${RUN_ID}?session_id=${RUN_ID}`,
       expect.objectContaining({ headers: expect.any(Object) }),
@@ -144,6 +154,7 @@ describe("AIOS remediation console", () => {
 
   it("submits the exact approval binding and default reviewer", async () => {
     fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
       .mockResolvedValueOnce(
         response(
           runView("AWAITING_APPROVAL", {
@@ -164,32 +175,42 @@ describe("AIOS remediation console", () => {
       .mockResolvedValueOnce(response(runView("DRAFT_PR_CREATED")))
       .mockResolvedValueOnce(response(runList("DRAFT_PR_CREATED")));
     render(<App />);
+    openManualRun();
     fireEvent.click(screen.getByRole("button", { name: "Create remediation run" }));
     expect(await screen.findAllByText("Review the patch scope")).toHaveLength(1);
     expect(screen.getAllByText("AWAITING APPROVAL").some((item) => item.classList.contains("warning"))).toBe(true);
+    expect(screen.getByLabelText("Reviewer ID")).toHaveValue("Kei Yam");
+    expect(screen.getByLabelText("Review comment")).toHaveValue("Approved");
     fireEvent.click(await screen.findByRole("button", { name: "Approve and continue" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
-    const approvalCall = fetchMock.mock.calls[2];
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    const approvalCall = fetchMock.mock.calls[3];
     expect(approvalCall[0]).toBe(`/api/runs/${RUN_ID}/approval`);
-    expect(String(approvalCall[1]?.body)).toContain('"reviewer_id":"Arabasta"');
+    expect(String(approvalCall[1]?.body)).toContain('"reviewer_id":"Kei Yam"');
+    expect(String(approvalCall[1]?.body)).toContain('"comment":"Approved"');
     expect(String(approvalCall[1]?.body)).toContain('"scope_digest":"sha256:abc"');
   });
 
   it("shows stable gateway failures in readable form", async () => {
-    fetchMock.mockResolvedValue(response({ error: "AGENTCORE_TIMEOUT" }, 504));
+    fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
+      .mockResolvedValueOnce(response({ error: "AGENTCORE_TIMEOUT" }, 504));
     render(<App />);
     fireEvent.click(screen.getByRole("tab", { name: "System Status" }));
     fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
     expect(await screen.findByText("agentcore timeout")).toBeInTheDocument();
     expect(screen.getByText("UNAVAILABLE")).toHaveClass("error");
-    fireEvent.click(screen.getByRole("tab", { name: "Run Console" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Runs" }));
     expect(screen.getByText("agentcore timeout")).not.toBeVisible();
   });
 
   it("shows the bounded A2A failure code for rejected runs", async () => {
-    fetchMock.mockResolvedValue(response(runView("INVALID_REQUEST", { failure_code: "INVALID_DATA_PART" })));
+    fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
+      .mockResolvedValueOnce(response(runView("INVALID_REQUEST", { failure_code: "INVALID_DATA_PART" })))
+      .mockResolvedValueOnce(response(runList("INVALID_REQUEST")));
     render(<App />);
+    openManualRun();
     fireEvent.click(screen.getByRole("button", { name: "Create remediation run" }));
 
     expect(await screen.findByText("invalid data part")).toBeInTheDocument();
@@ -197,7 +218,9 @@ describe("AIOS remediation console", () => {
   });
 
   it("does not mislabel non-JSON gateway responses as invalid handoff JSON", async () => {
-    fetchMock.mockResolvedValue(nonJsonResponse());
+    fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
+      .mockResolvedValueOnce(nonJsonResponse());
     render(<App />);
     fireEvent.click(screen.getByRole("tab", { name: "System Status" }));
     fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
@@ -207,22 +230,26 @@ describe("AIOS remediation console", () => {
   });
 
   it("disables run creation when the handoff JSON is invalid", () => {
+    fetchMock.mockResolvedValue(response(runList("READY")));
     render(<App />);
+    openManualRun();
     fireEvent.click(screen.getByText("Advanced input"));
     fireEvent.change(screen.getByLabelText("Diagnosis handoff JSON"), { target: { value: "{" } });
 
     expect(screen.getByRole("button", { name: "Create remediation run" })).toBeDisabled();
   });
 
-  it("supports keyboard tab navigation and preserves Run Console input", () => {
+  it("supports keyboard tab navigation and preserves Manual Run input", () => {
+    fetchMock.mockResolvedValue(response(runList("READY")));
     render(<App />);
+    openManualRun();
     fireEvent.click(screen.getByText("Advanced input"));
     const input = screen.getByLabelText("Diagnosis handoff JSON");
     fireEvent.change(input, { target: { value: '{"case_id":"preserved"}' } });
 
-    const runTab = screen.getByRole("tab", { name: "Run Console" });
-    runTab.focus();
-    fireEvent.keyDown(runTab, { key: "ArrowRight" });
+    const manualTab = screen.getByRole("tab", { name: "Manual Run" });
+    manualTab.focus();
+    fireEvent.keyDown(manualTab, { key: "ArrowLeft" });
 
     const runsTab = screen.getByRole("tab", { name: "Runs" });
     expect(runsTab).toHaveFocus();
@@ -231,23 +258,25 @@ describe("AIOS remediation console", () => {
 
     fireEvent.keyDown(runsTab, { key: "End" });
     expect(screen.getByRole("tab", { name: "System Status" })).toHaveFocus();
-    fireEvent.click(screen.getByRole("tab", { name: "Run Console" }));
+    openManualRun();
     expect(screen.getByLabelText("Diagnosis handoff JSON")).toHaveValue('{"case_id":"preserved"}');
-    expect(screen.getByRole("complementary", { name: "Run Console sections" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Run Console sections" })).not.toBeInTheDocument();
   });
 
   it("shows explicit provider probe results only in System Status", async () => {
-    fetchMock.mockResolvedValue(response({
-      output: {
-        status: "SUCCEEDED",
-        provider: "openai",
-        model: "kei-openai-target/gpt-5.6-terra",
-        duration_ms: 321,
-        input_tokens: 8,
-        output_tokens: 2,
-        response_digest: "sha256:probe",
-      },
-    }));
+    fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
+      .mockResolvedValueOnce(response({
+        output: {
+          status: "SUCCEEDED",
+          provider: "openai",
+          model: "kei-openai-target/gpt-5.6-terra",
+          duration_ms: 321,
+          input_tokens: 8,
+          output_tokens: 2,
+          response_digest: "sha256:probe",
+        },
+      }));
     render(<App />);
     fireEvent.click(screen.getByRole("tab", { name: "System Status" }));
 
@@ -260,8 +289,9 @@ describe("AIOS remediation console", () => {
   });
 
   it("presents workflow, validation, evidence, and the draft PR as console results", async () => {
-    fetchMock.mockResolvedValue(
-      response(
+    fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
+      .mockResolvedValueOnce(response(
         runView("DRAFT_PR_CREATED", {
           result: {
             final_status: "DRAFT_PR_CREATED",
@@ -427,10 +457,11 @@ describe("AIOS remediation console", () => {
             },
           },
         }),
-      ),
-    );
+      ))
+      .mockResolvedValueOnce(response(runList("DRAFT_PR_CREATED")));
     render(<App />);
 
+    openManualRun();
     fireEvent.click(screen.getByRole("button", { name: "Create remediation run" }));
 
     expect((await screen.findAllByText("DRAFT PR CREATED")).length).toBeGreaterThan(0);
@@ -455,21 +486,33 @@ describe("AIOS remediation console", () => {
     expect(screen.getByText("Historical incident memory")).toBeInTheDocument();
     expect(screen.getByText("incident-safe-01")).toBeInTheDocument();
     expect(screen.getByText("91% match")).toBeInTheDocument();
-    expect(screen.getByText("Memory cannot authorize paths or tools, replace repository inspection, reuse a patch, or bypass policy and validation.")).toBeInTheDocument();
+    expect(screen.getByText("Inspection tool-call flow")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Plan/ }));
+    expect(screen.queryByText("Inspection tool-call flow")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Inspect/ }));
+    expect(screen.getByText("Inspection tool-call flow")).toBeInTheDocument();
+    for (const removedCopy of [
+      "Create and monitor a bounded remediation run from an Agent 2 diagnosis handoff.",
+      "Current progress for the active runtime session.",
+      "Shows bounded summaries and recorded actions—not private reasoning tokens or raw prompts.",
+      "Advisory suggestions only; current commit evidence remains authoritative.",
+      "Memory cannot authorize paths or tools, replace repository inspection, reuse a patch, or bypass policy and validation.",
+      "Model choice followed by policy-bounded MCP execution.",
+      "Provider summaries are optional and redacted.",
+      "Typed proof from the sandbox adapter, without raw session identifiers.",
+    ]) {
+      expect(screen.queryByText(removedCopy)).not.toBeInTheDocument();
+    }
   });
 
   it("lists, refreshes, and opens shared public runs", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
     fetchMock
-      .mockResolvedValueOnce(response(runView("AWAITING_APPROVAL")))
-      .mockResolvedValueOnce(response(runList("AWAITING_APPROVAL")))
       .mockResolvedValueOnce(response(runList("AWAITING_APPROVAL")))
       .mockResolvedValueOnce(response(runView("DRAFT_PR_CREATED")))
       .mockResolvedValueOnce(response(runView("DRAFT_PR_CREATED")));
     render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Create remediation run" }));
-    await screen.findAllByText("AWAITING APPROVAL");
-    fireEvent.click(screen.getByRole("tab", { name: "Runs" }));
 
     expect((await screen.findAllByText("CASE-ECOM-AVG-001")).length).toBeGreaterThan(0);
     expect(screen.getByText(/Shared public demo runs from Agent 2/)).toBeInTheDocument();
@@ -477,20 +520,24 @@ describe("AIOS remediation console", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     expect((await screen.findAllByText("DRAFT PR CREATED")).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
-    await waitFor(() => expect(screen.getByRole("tab", { name: "Run Console" })).toHaveAttribute("aria-selected", "true"));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Remediation console" })).toBeVisible());
+    expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
+    const serviceNav = screen.getByRole("complementary", { name: "Run Console sections" });
+    const workflowButton = within(serviceNav).getByRole("button", { name: "Workflow" });
+    fireEvent.click(workflowButton);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(workflowButton).toHaveAttribute("aria-current", "location");
     expect(screen.queryByRole("button", { name: "Forget" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to runs" }));
+    expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
+    expect(screen.queryByRole("complementary", { name: "Run Console sections" })).not.toBeInTheDocument();
   });
 
   it("retains the last known run summary when a refresh fails", async () => {
     fetchMock
-      .mockResolvedValueOnce(response(runView("DRAFT_PR_CREATED")))
-      .mockResolvedValueOnce(response(runList("DRAFT_PR_CREATED")))
       .mockResolvedValueOnce(response(runList("DRAFT_PR_CREATED")))
       .mockResolvedValueOnce(response({ error: "AGENTCORE_TIMEOUT" }, 504));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Create remediation run" }));
-    await screen.findAllByText("DRAFT PR CREATED");
-    fireEvent.click(screen.getByRole("tab", { name: "Runs" }));
     fireEvent.click(await screen.findByRole("button", { name: "Refresh" }));
 
     expect(await screen.findByText("agentcore timeout")).toBeInTheDocument();
@@ -501,6 +548,7 @@ describe("AIOS remediation console", () => {
   it("loads an integrity-checked artifact in an accessible searchable modal", async () => {
     const digest = `sha256:${"a".repeat(64)}`;
     fetchMock
+      .mockResolvedValueOnce(response(runList("READY")))
       .mockResolvedValueOnce(response(runView("DRAFT_PR_CREATED", {
         result: {
           final_status: "DRAFT_PR_CREATED",
@@ -533,6 +581,7 @@ describe("AIOS remediation console", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(<App />);
+    openManualRun();
     fireEvent.click(screen.getByRole("button", { name: "Create remediation run" }));
     const viewButton = await screen.findByRole("button", { name: "View" });
     fireEvent.click(viewButton);

@@ -17,8 +17,8 @@ describe("shared agent shell", () => {
     render(<App />);
 
     expect(screen.getByRole("tab", { name: /^Agent 3$/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Run Console" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Remediation console" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Runs" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 
   it.each(["Agent 1", "Agent 2", "Agent 4"])("shows a blank workspace for %s", (label) => {
@@ -28,7 +28,7 @@ describe("shared agent shell", () => {
 
     expect(screen.getByRole("tab", { name: new RegExp(`^${label}$`) })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tabpanel")).toBeEmptyDOMElement();
-    expect(screen.getByRole("tab", { name: "Run Console", hidden: true })).not.toBeVisible();
+    expect(screen.getByRole("tab", { name: "Runs", hidden: true })).not.toBeVisible();
   });
 
   it("supports keyboard navigation across agent tabs", () => {
@@ -54,5 +54,16 @@ describe("shared agent shell", () => {
 
     expect(screen.getByText("Tool and policy boundary")).toBeVisible();
     expect(screen.getByRole("tab", { name: /^Agent$/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("returns to the Runs list from the shared home action", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("tab", { name: "Manual Run" }));
+    expect(screen.getByRole("heading", { name: "Manual remediation run" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("link", { name: "AIOS Operations home" }));
+
+    expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 });
