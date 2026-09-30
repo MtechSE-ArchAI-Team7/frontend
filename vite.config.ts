@@ -13,6 +13,9 @@ export default defineConfig({
     proxy: { "/api/cases": "http://127.0.0.1:8787" },
   },
   test: {
+    // Tests must not depend on the shell they run in: `VITE_AGENT2_API=... make deploy` exports
+    // the gateway URL to the test step too, and Agent 2's tests expect same-origin paths.
+    env: { VITE_AGENT2_API: "" },
     environment: "jsdom",
     setupFiles: ["./shared/test-setup.ts"],
   },
