@@ -17,5 +17,5 @@
     "jsx": "react-jsx",
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["shared", "agent3"]
+  "include": ["shared", "agent2", "agent3"]
 }

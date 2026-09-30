@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
+import Agent2App, { HASH_PREFIX as AGENT2_HASH_PREFIX } from "../agent2/App";
 import Agent3App from "../agent3/App";
 
 const AGENTS = [
@@ -12,7 +13,13 @@ const AGENTS = [
 export type AgentId = (typeof AGENTS)[number]["id"];
 
 export default function App() {
-  const [activeAgent, setActiveAgent] = useState<AgentId>("agent3");
+  // A case link (#/agent2/AH-39) opens on Agent 2; everything else on the default agent.
+  const [activeAgent, setActiveAgent] = useState<AgentId>(() =>
+    window.location.hash.startsWith(AGENT2_HASH_PREFIX) ? "agent2" : "agent3",
+  );
+  // Agent 2 calls its gateway as soon as it mounts, so it is not mounted until its tab is
+  // first opened; after that it stays mounted like Agent 3, keeping its selection.
+  const [agent2Opened, setAgent2Opened] = useState(activeAgent === "agent2");
   const [homeSignal, setHomeSignal] = useState(0);
   const tabRefs = useRef<Record<AgentId, HTMLButtonElement | null>>({
     agent1: null,
@@ -22,6 +29,7 @@ export default function App() {
   });
 
   function selectAgent(agentId: AgentId) {
+    if (agentId === "agent2") setAgent2Opened(true);
     setActiveAgent(agentId);
   }
 
@@ -87,7 +95,16 @@ export default function App() {
         <Agent3App homeSignal={homeSignal} />
       </section>
 
-      {AGENTS.filter((agent) => agent.id !== "agent3").map((agent) => (
+      <section
+        id="agent-panel-agent2"
+        role="tabpanel"
+        aria-labelledby="agent-tab-agent2"
+        hidden={activeAgent !== "agent2"}
+      >
+        {agent2Opened && <Agent2App active={activeAgent === "agent2"} />}
+      </section>
+
+      {AGENTS.filter((agent) => agent.id !== "agent2" && agent.id !== "agent3").map((agent) => (
         <main
           key={agent.id}
           id={`agent-panel-${agent.id}`}

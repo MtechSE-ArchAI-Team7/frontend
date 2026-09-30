@@ -5,6 +5,7 @@ import App from "./App";
 describe("shared agent shell", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.stubGlobal("fetch", vi.fn());
   });
 
@@ -21,7 +22,7 @@ describe("shared agent shell", () => {
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 
-  it.each(["Agent 1", "Agent 2", "Agent 4"])("shows a blank workspace for %s", (label) => {
+  it.each(["Agent 1", "Agent 4"])("shows a blank workspace for %s", (label) => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${label}$`) }));
@@ -65,5 +66,41 @@ describe("shared agent shell", () => {
 
     expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
+  });
+
+  it("does not mount Agent 2, or call its gateway, until its tab is first opened", () => {
+    sessionStorage.setItem("agent2-log-ui-token", "tok");
+    render(<App />);
+    const agent2Calls = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/api/cases"));
+    expect(agent2Calls()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Agent 2$/ }));
+    expect(agent2Calls()).toHaveLength(1);
+    expect(String(agent2Calls()[0][0])).toMatch(/\/api\/cases\?since_hours=24$/);
+  });
+
+  it("shows Agent 2's token gate in its own tab and keeps Agent 3 untouched", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("tab", { name: /^Agent 2$/ }));
+
+    expect(screen.getByRole("tab", { name: /^Agent 2$/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Access token")).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Runs", hidden: true })).not.toBeVisible();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Agent 3$/ }));
+    expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
+    expect(screen.getByLabelText("Access token", { selector: "input" })).not.toBeVisible();
+  });
+
+  it("opens on Agent 2 for a case link, and leaves Agent 3 the default otherwise", () => {
+    window.location.hash = "#/agent2/AH-39";
+    const { unmount } = render(<App />);
+    expect(screen.getByRole("tab", { name: /^Agent 2$/ })).toHaveAttribute("aria-selected", "true");
+    unmount();
+
+    window.location.hash = "#runs";
+    render(<App />);
+    expect(screen.getByRole("tab", { name: /^Agent 3$/ })).toHaveAttribute("aria-selected", "true");
+    window.location.hash = "";
   });
 });
