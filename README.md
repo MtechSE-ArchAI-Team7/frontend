@@ -7,13 +7,22 @@ This repository contains the shared browser shell for the AIOS demonstration and
 ```text
 shared/            Shared application entry point, utility header, agent navigation, and shell tests
 agent1/            Reserved for Agent 1; intentionally empty
-agent2/            Reserved for Agent 2; intentionally empty
+agent2/            Agent 2 log viewer (front end only; its gateway is deployed from the diagnosis-agent repository)
 agent3/            Resolution/remediation console and its Lambda gateway
 agent4/            Reserved for Agent 4; intentionally empty
 scripts/           Guarded deployment tooling
 ```
 
-Agent 3 is selected by default. Selecting Agent 1, Agent 2, or Agent 4 leaves the workspace blank while keeping the shared headers available. The Agent 3 console retains its state when another agent tab is selected.
+Agent 3 is selected by default. Selecting Agent 1 or Agent 4 leaves the workspace blank while keeping the shared headers available. The Agent 3 and Agent 2 consoles retain their state when another agent tab is selected.
+
+## Agent 2 log viewer
+
+Agent 2's tab reads its own gateway, `agent2-log-ui` (source, tests, and deployment live in the diagnosis-agent repository). Every request needs the gateway's bearer token, which the tab asks for and keeps in `sessionStorage`.
+
+- `VITE_AGENT2_API` sets the gateway's base URL at build time (its Function URL, no path). Unset means the page's own origin. The gateway must list the page's origin in `LOG_UI_ALLOWED_ORIGINS` (Terraform variable `allowed_origins` in diagnosis-agent `infra/log-ui`).
+- For local work, run the gateway's `dev_server.py` from diagnosis-agent (`127.0.0.1:8787`) and leave `VITE_AGENT2_API` unset: `npm run dev` proxies `/api/cases` to it.
+- Case links are `#/agent2/<case id>`; opening one selects the Agent 2 tab. Agent 2 does not call its gateway until its tab is first opened.
+- `agent2/styles.css` is scoped to `.agent2-root`. Keep it that way: the other agents' stylesheets are global, and nothing in `agent2/` may change how they render.
 
 ## Development
 

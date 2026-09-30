@@ -1,0 +1,741 @@
+/* Agent 2 (log viewer). Every rule is under .agent2-root: the page is shared with the other
+   agents, whose stylesheets are global, so nothing here may reach outside this panel, and the
+   panel restates whatever a global rule of theirs (button, table, th, td) would otherwise
+   impose on it. Colours come from the shared shell's tokens (--gray-*, --blue-*, --orange-*).
+
+   The categorical span-kind slots are the dataviz reference palette in its fixed order
+   (slots 1-5), validated for light mode: worst adjacent CVD delta-E 9.1. Three slots sit under
+   3:1 on a white surface, so every bar row carries a text label. Status colours are reserved
+   and always ship with an icon and a label. There is no dark mode: the shell has none. */
+.agent2-root {
+  --surface: #fff;
+  --surface-2: var(--gray-50);
+  --ink: #16191f;
+  --ink-2: var(--gray-700);
+  --muted: var(--gray-500);
+  --grid: var(--gray-200);
+  --axis: #b6bec7;
+  --border: var(--gray-300);
+  --accent: var(--blue-600);
+  --accent-wash: rgba(9, 114, 211, 0.1);
+
+  --cat-root: #52514e;
+  --cat-node: #2a78d6;
+  --cat-tool: #eb6834;
+  --cat-llm: #1baf7a;
+  --cat-agent3: #eda100;
+  --cat-jira: #e87ba4;
+  --cat-auto: #c3c2b7;
+
+  --good: var(--green-700);
+  --warning: #fab219;
+  --warning-ink: var(--amber-800);
+  --serious: #ec835a;
+  --serious-ink: #8f3a17;
+  --critical: var(--red-700);
+  --critical-ink: var(--red-700);
+
+  /* Timeline sources: slots 1-3, the only slots that validate all-pairs. Always labelled. */
+  --src-log: #2a78d6;
+  --src-span: #eb6834;
+  --src-audit: #1baf7a;
+
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  min-height: calc(100vh - 94px);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.agent2-root h1,
+.agent2-root h2,
+.agent2-root h3,
+.agent2-root h4 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+.agent2-root .muted {
+  color: var(--muted);
+}
+.agent2-root .small {
+  font-size: 12px;
+}
+.agent2-root .mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.agent2-root .nowrap {
+  white-space: nowrap;
+}
+.agent2-root .error {
+  color: var(--critical-ink);
+}
+
+/* Buttons: the shell's look. Default is the primary action, .ghost the secondary one. The
+   min-height/padding/size restate what Agent 3's bare `button` rule sets. */
+.agent2-root button {
+  min-height: 30px;
+  padding: 5px 14px;
+  color: #111;
+  background: var(--orange-500);
+  border: 1px solid #ec8b00;
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.agent2-root button:hover:not(:disabled) {
+  background: #ec8b00;
+}
+.agent2-root button:disabled {
+  opacity: 0.55;
+}
+.agent2-root button.ghost {
+  color: #16191f;
+  background: #fff;
+  border-color: #7d8998;
+}
+.agent2-root button.ghost:hover:not(:disabled) {
+  background: var(--gray-100);
+}
+.agent2-root button.small {
+  min-height: 0;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.agent2-root button.linklike {
+  min-height: 0;
+  padding: 0;
+  color: var(--blue-600);
+  background: none;
+  border: 0;
+  font-weight: 400;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--axis);
+  text-underline-offset: 3px;
+}
+.agent2-root button.linklike:hover:not(:disabled) {
+  color: var(--blue-700);
+  background: none;
+  text-decoration-color: currentColor;
+}
+.agent2-root :focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: 2px;
+}
+
+.agent2-root input[type="search"],
+.agent2-root input[type="password"],
+.agent2-root select {
+  min-height: 30px;
+  padding: 4px 8px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #7d8998;
+  border-radius: 2px;
+  font: inherit;
+}
+
+/* ---------------------------------------------------------------- token gate */
+
+.agent2-root .gate {
+  min-height: calc(100vh - 94px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.agent2-root .gate-card {
+  width: min(380px, 100%);
+  display: grid;
+  gap: 10px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: 0 1px 1px rgba(0, 28, 36, 0.04);
+}
+.agent2-root .gate-card h1 {
+  font-size: 18px;
+}
+.agent2-root .gate-card p {
+  margin: 0;
+}
+.agent2-root .gate-card label {
+  font-weight: 700;
+  font-size: 12px;
+}
+.agent2-root .gate-error {
+  color: var(--critical-ink);
+}
+
+/* ---------------------------------------------------------------- shell */
+
+/* Toolbar under the shared agent tabs. */
+.agent2-root .topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 14px 22px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.agent2-root .topbar h1 {
+  font-size: 20px;
+  letter-spacing: -0.012em;
+}
+.agent2-root .topbar-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.agent2-root .topbar-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.agent2-root .range {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.agent2-root .layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: calc(100vh - 94px - 61px);
+}
+.agent2-root .main {
+  min-width: 0;
+  padding: 20px 28px 42px;
+}
+.agent2-root .empty {
+  color: var(--muted);
+  padding: 40px 0;
+}
+
+/* ---------------------------------------------------------------- case list */
+
+/* Sticks under the shell's header (48px) and agent tabs (46px). */
+.agent2-root .caselist {
+  position: sticky;
+  top: 94px;
+  height: calc(100vh - 94px);
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.agent2-root .caselist-search {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.agent2-root .caselist-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 4px;
+}
+.agent2-root .caselist ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.agent2-root button.caserow {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: 0;
+  font-weight: 400;
+}
+.agent2-root button.caserow:hover:not(:disabled) {
+  background: #f7f8f8;
+}
+.agent2-root button.caserow.selected {
+  background: #eaeded;
+  border-left-color: var(--orange-500);
+}
+.agent2-root .caserow-top,
+.agent2-root .caserow-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.agent2-root .caserow-id {
+  font-weight: 700;
+}
+.agent2-root .caserow-time {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------- status */
+
+.agent2-root .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.agent2-root .status-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--muted);
+  flex: none;
+}
+.agent2-root .status-good .status-icon {
+  background: var(--good);
+}
+.agent2-root .status-warning .status-icon {
+  background: var(--warning);
+  color: #3a2800;
+}
+.agent2-root .status-serious .status-icon {
+  background: var(--serious);
+  color: #3a1405;
+}
+.agent2-root .status-critical .status-icon {
+  background: var(--critical);
+}
+
+/* ---------------------------------------------------------------- case view */
+
+.agent2-root .case {
+  display: grid;
+  gap: 16px;
+}
+.agent2-root .case h2 {
+  font-size: 24px;
+  letter-spacing: -0.015em;
+}
+.agent2-root .loading {
+  line-height: 1.8;
+}
+
+.agent2-root .tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.agent2-root .tile {
+  padding: 12px 16px;
+  border-right: 1px solid var(--gray-200);
+}
+.agent2-root .tile:last-child {
+  border-right: 0;
+}
+.agent2-root .tile dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.agent2-root .tile dd {
+  margin: 3px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.agent2-root .table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: 0 1px 1px rgba(0, 28, 36, 0.04);
+}
+.agent2-root .table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.agent2-root .table caption {
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+.agent2-root .table th,
+.agent2-root .table td {
+  max-width: none;
+  padding: 8px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--grid);
+}
+.agent2-root .table th {
+  color: var(--ink-2);
+  background: var(--gray-50);
+  border-bottom-color: var(--border);
+  font-weight: 700;
+  white-space: normal;
+}
+.agent2-root .table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.agent2-root .table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.agent2-root .reason {
+  margin-top: 2px;
+  max-width: 42ch;
+}
+
+/* Section tabs: same treatment as Agent 3's console tabs. */
+.agent2-root .tabs {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+.agent2-root button.tab {
+  min-height: 42px;
+  padding: 0 18px;
+  color: var(--gray-700);
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.agent2-root button.tab:hover:not(:disabled) {
+  color: var(--blue-700);
+  background: var(--gray-50);
+}
+.agent2-root button.tab.active {
+  color: var(--navy-950);
+  border-bottom-color: var(--orange-500);
+}
+.agent2-root button.tab:focus-visible {
+  outline-offset: -4px;
+}
+
+.agent2-root .controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.agent2-root .controls label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.agent2-root .trace-meta {
+  margin-left: auto;
+}
+
+/* ---------------------------------------------------------------- waterfall */
+
+.agent2-root .legend {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.agent2-root .legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent2-root .swatch {
+  width: 12px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.agent2-root .cat-root {
+  background: var(--cat-root);
+}
+.agent2-root .cat-node {
+  background: var(--cat-node);
+}
+.agent2-root .cat-tool {
+  background: var(--cat-tool);
+}
+.agent2-root .cat-llm {
+  background: var(--cat-llm);
+}
+.agent2-root .cat-agent3 {
+  background: var(--cat-agent3);
+}
+.agent2-root .cat-jira {
+  background: var(--cat-jira);
+}
+.agent2-root .cat-auto {
+  background: var(--cat-auto);
+}
+
+.agent2-root .wf {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.agent2-root .wf-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 38%) minmax(0, 1fr);
+  width: 100%;
+  align-items: center;
+  min-height: 24px;
+  padding: 0;
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--grid);
+  border-radius: 0;
+  font-weight: 400;
+}
+.agent2-root .wf-row:last-child {
+  border-bottom: 0;
+}
+.agent2-root button.wf-row:hover:not(:disabled) {
+  background: var(--gray-50);
+}
+.agent2-root .wf-row.selected {
+  background: var(--accent-wash);
+}
+.agent2-root .wf-axis {
+  min-height: 22px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agent2-root .wf-label {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  padding-right: 8px;
+  font-size: 12px;
+}
+.agent2-root .wf-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent2-root .wf-dur {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.agent2-root .wf-fail {
+  color: var(--critical-ink);
+  font-weight: 700;
+}
+.agent2-root .wf-track {
+  position: relative;
+  height: 24px;
+  margin-right: 12px;
+  background-image: linear-gradient(to right, var(--grid) 1px, transparent 1px);
+  background-size: 25% 100%;
+}
+.agent2-root .wf-axis .wf-track {
+  background: none;
+  height: 22px;
+}
+.agent2-root .wf-tick {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.agent2-root .wf-tick:first-child {
+  transform: none;
+}
+.agent2-root .wf-tick:last-child {
+  transform: translateX(-100%);
+}
+.agent2-root .wf-bar {
+  position: absolute;
+  top: 7px;
+  height: 10px;
+  border-radius: 2px;
+}
+/* A group spans its first start to last end; lighter, so it never reads as one long call. */
+.agent2-root .wf-bar-group {
+  opacity: 0.45;
+}
+.agent2-root .wf-caret {
+  width: 10px;
+  color: var(--muted);
+}
+.agent2-root .wf-failcount {
+  margin-left: auto;
+  color: var(--critical-ink);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.agent2-root .wf-bar.failed {
+  outline: 2px solid var(--critical);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------- timeline, logs */
+
+.agent2-root .source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.agent2-root .source::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.agent2-root .source-log::before {
+  background: var(--src-log);
+}
+.agent2-root .source-span::before {
+  background: var(--src-span);
+}
+.agent2-root .source-audit::before {
+  background: var(--src-audit);
+}
+
+.agent2-root .level {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.agent2-root .level-warning {
+  color: var(--warning-ink);
+  font-weight: 700;
+}
+.agent2-root .level-error,
+.agent2-root .level-critical {
+  color: var(--critical-ink);
+  font-weight: 700;
+}
+
+.agent2-root .tl-detail td {
+  background: var(--surface-2);
+}
+.agent2-root .json {
+  margin: 0;
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.agent2-root .chain {
+  margin: 0 0 10px;
+}
+
+/* ---------------------------------------------------------------- span drawer */
+
+/* Fixed to the viewport but below the shell's header and agent tabs (94px), which sit at
+   z-index 29-30, so it never covers the way back to another agent. */
+.agent2-root .drawer {
+  position: fixed;
+  top: 94px;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  width: min(440px, 100vw);
+  overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgba(0, 28, 36, 0.12);
+}
+.agent2-root .drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 8px;
+}
+.agent2-root .drawer-head h3 {
+  font-size: 15px;
+  word-break: break-all;
+}
+.agent2-root .drawer h4 {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.agent2-root .kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+}
+.agent2-root .kv dt {
+  color: var(--muted);
+}
+.agent2-root .kv dd {
+  margin: 0;
+  word-break: break-word;
+}
+.agent2-root .kv-row {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------- narrow screens */
+
+@media (max-width: 760px) {
+  .agent2-root .layout {
+    grid-template-columns: 1fr;
+  }
+  .agent2-root .caselist {
+    position: static;
+    height: auto;
+    max-height: 40vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .agent2-root .main {
+    padding: 16px;
+  }
+  .agent2-root .topbar {
+    padding: 12px 14px;
+  }
+  .agent2-root .topbar-actions {
+    margin-left: 0;
+  }
+  .agent2-root .wf-row {
+    grid-template-columns: minmax(150px, 45%) minmax(0, 1fr);
+  }
+}
