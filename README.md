@@ -9,11 +9,20 @@ shared/            Shared application entry point, utility header, agent navigat
 agent1/            Reserved for Agent 1; intentionally empty
 agent2/            Agent 2 log viewer (front end only; its gateway is deployed from the diagnosis-agent repository)
 agent3/            Resolution/remediation console and its Lambda gateway
-agent4/            Reserved for Agent 4; intentionally empty
+agent4/            Agent 4 post-merge runs console (front end only; reads the eval_agent receiver)
 scripts/           Guarded deployment tooling
 ```
 
-Agent 3 is selected by default. Selecting Agent 1 or Agent 4 leaves the workspace blank while keeping the shared headers available. The Agent 3 and Agent 2 consoles retain their state when another agent tab is selected.
+Agent 3 is selected by default. Selecting Agent 1 leaves the workspace blank while keeping the shared headers available. The Agent 3, Agent 2, and Agent 4 consoles retain their state when another agent tab is selected.
+
+## Agent 4 post-merge runs console
+
+Agent 4's tab reads the `eval_agent` receiver (source and deployment live in the `mcp-atlassian-agent` repository, `atlassian_agent.webhook`). The receiver serves read-only JSON with `Access-Control-Allow-Origin: *`, so no gateway of its own is needed.
+
+- `GET <receiver>/runs.json` — run summaries, newest first: run id, PR, case badge (`CASE-xxx` plus a `remediation draft` marker), status, overall verdict (PASS green / FAIL red / INCONCLUSIVE amber), started time.
+- Clicking a run opens the detail view: gate-verdict table from `run.json` (last `gates graded` event), artifact list linking through the receiver's `GET /runs/<id>/<artifact>` route, and the run's `report.md` rendered as pre-formatted text. `report.md` 404s until the run reaches Stage F; that shows as "no report yet", not an error.
+- `VITE_AGENT4_API` sets the receiver base URL at build time (no trailing slash). Unset defaults to `http://localhost:8000`, the receiver's compose port — `npm run dev` works against a locally running receiver with no configuration.
+- The receiver redacts secret-shaped strings on serve, and the tab calls only GET routes; the webhook write route accepts no cross-origin calls.
 
 ## Agent 2 log viewer
 

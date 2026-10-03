@@ -15,7 +15,9 @@ export default defineConfig({
   test: {
     // Tests must not depend on the shell they run in: `VITE_AGENT2_API=... make deploy` exports
     // the gateway URL to the test step too, and Agent 2's tests expect same-origin paths.
-    env: { VITE_AGENT2_API: "" },
+    // Agent 4 gets the same treatment for VITE_AGENT4_API so its tests never reach the
+    // real receiver base.
+    env: { VITE_AGENT2_API: "", VITE_AGENT4_API: "" },
     environment: "jsdom",
     setupFiles: ["./shared/test-setup.ts"],
   },

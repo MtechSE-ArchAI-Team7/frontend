@@ -22,7 +22,7 @@ describe("shared agent shell", () => {
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 
-  it.each(["Agent 1", "Agent 4"])("shows a blank workspace for %s", (label) => {
+  it.each(["Agent 1"])(`shows a blank workspace for %s`, (label) => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${label}$`) }));
@@ -30,6 +30,37 @@ describe("shared agent shell", () => {
     expect(screen.getByRole("tab", { name: new RegExp(`^${label}$`) })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tabpanel")).toBeEmptyDOMElement();
     expect(screen.getByRole("tab", { name: "Runs", hidden: true })).not.toBeVisible();
+  });
+
+  it("does not mount Agent 4, or call its receiver, until its tab is first opened", () => {
+    render(<App />);
+    const agent4Calls = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/runs.json"));
+    expect(agent4Calls()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Agent 4$/ }));
+    expect(agent4Calls()).toHaveLength(1);
+    expect(String(agent4Calls()[0][0])).toMatch(/\/runs\.json$/);
+  });
+
+  it("shows Agent 4's runs console in its own tab and keeps it mounted", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    } as Response);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Agent 4$/ }));
+    expect(screen.getByRole("tab", { name: /^Agent 4$/ })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("heading", { name: "Post-merge runs" })).toBeVisible();
+    expect(screen.getByText(/No runs recorded yet/)).toBeInTheDocument();
+
+    // stays mounted (state preserved) while another tab is selected
+    fireEvent.click(screen.getByRole("tab", { name: /^Agent 3$/ }));
+    expect(screen.getByRole("heading", { name: "Post-merge runs", hidden: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /^Agent 4$/ }));
+    expect(screen.getByRole("heading", { name: "Post-merge runs" })).toBeVisible();
+    expect(screen.getByText(/No runs recorded yet/)).toBeInTheDocument();
   });
 
   it("supports keyboard navigation across agent tabs", () => {
