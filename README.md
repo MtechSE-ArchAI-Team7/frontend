@@ -24,6 +24,8 @@ Agent 4's tab reads the `eval_agent` receiver (source and deployment live in the
 - `VITE_AGENT4_API` sets the receiver base URL at build time (no trailing slash). Unset defaults to `http://localhost:8000`, the receiver's compose port — `npm run dev` works against a locally running receiver with no configuration.
 - The receiver redacts secret-shaped strings on serve, and the tab calls only GET routes; the webhook write route accepts no cross-origin calls.
 
+The current production release default intentionally keeps `VITE_AGENT4_API=http://localhost:8000` until the Agent 4 owner provides a public receiver URL. The Agent 4 tab is present, but remote browsers cannot retrieve run data with that fallback. Supply the approved HTTPS receiver origin when it becomes available and run a new guarded release.
+
 ## Agent 2 log viewer
 
 Agent 2's tab reads its own gateway, `agent2-log-ui` (source, tests, and deployment live in the diagnosis-agent repository). Every request needs the gateway's bearer token, which the tab asks for and keeps in `sessionStorage`.
@@ -48,11 +50,31 @@ The production build is written to `agent3/backend/site/` and is not committed.
 
 The Agent 3 scenario under `agent3/scenarios/` is the browser's demonstration input. The generated tool catalogue under `agent3/generated/` is a presentation snapshot of the remediation service's typed `/v1/tools` contract. When the service catalogue or demonstration handoff changes, update the corresponding Agent 3 snapshot and its tests in the same change.
 
+Run details expose bounded validation stdout or stderr through `View output` and `View error`. When the runtime reports that its output cap was reached, the UI displays `Output was truncated by the validation limit.` These controls are release-protected feature markers.
+
 ## Agent 3 deployment
 
-`make deploy` runs a clean dependency install, typecheck, frontend and gateway tests, and production build before updating the existing `aios-remediation-demo-ui` Lambda in AWS account `734849394833` and region `ap-southeast-1`.
+Normal releases use the manually dispatched **Deploy Agent 3 UI** workflow from `main`. The workflow runs `make check`, embeds the approved Agent 2 and Agent 4 browser endpoints, obtains short-lived AWS credentials through GitHub OIDC, and then updates the existing `aios-remediation-demo-ui` Lambda in AWS account `734849394833` and Region `ap-southeast-1`.
 
-The deployment changes only the Lambda code package. It verifies the existing runtime, handler, ARM64 architecture, timeout, state, and AWS account before writing. After deployment it checks the health route, compiled JavaScript asset, bounded run listing, and explicit provider probe. A failed smoke check restores the previous package automatically. It never starts a remediation run, changes Lambda configuration, or provisions infrastructure.
+The protected `production` environment must provide `AWS_UI_DEPLOY_ROLE_ARN`. The role must trust only this repository's `main` release workflow and grant only the calls needed to inspect and update the code package of:
+
+```text
+arn:aws:lambda:ap-southeast-1:734849394833:function:aios-remediation-demo-ui
+```
+
+The Lambda resource permissions are `lambda:GetFunction`, `lambda:GetFunctionConfiguration`, `lambda:GetFunctionUrlConfig`, and `lambda:UpdateFunctionCode`; the workflow also needs `sts:GetCallerIdentity` for its account guard. It does not need any Lambda configuration, IAM, AgentCore, or infrastructure mutation permission.
+
+The workflow does not create the role, change IAM, or modify Lambda configuration. It refuses non-`main` dispatches. The Agent 2 input is pinned to its approved Function URL; the Agent 4 input accepts the documented localhost fallback or a path-free HTTPS origin.
+
+The deployment changes only the Lambda code package. It verifies the existing runtime, handler, ARM64 architecture, timeout, state, AWS account, compiled endpoint values, and protected Agent 3 feature markers before writing. After deployment it checks the health route, downloaded JavaScript asset and feature markers, bounded run listing, and explicit provider probe. A failed smoke check restores the previous package automatically. It never starts a remediation run, changes Lambda configuration, or provisions infrastructure.
+
+`make deploy` and `scripts/deploy_agent3_ui.sh` remain available only for an explicitly authorized emergency operator repair. They require both production build variables and enforce the same preflight and rollback checks as the workflow:
+
+```bash
+VITE_AGENT2_API=https://sz3tbpu564gwikyhk2j3f7jn6y0vsusz.lambda-url.ap-southeast-1.on.aws \
+VITE_AGENT4_API=http://localhost:8000 \
+make deploy
+```
 
 Required Lambda environment values remain operator-managed:
 

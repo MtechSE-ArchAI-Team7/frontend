@@ -141,6 +141,9 @@ th { padding: 9px 11px; color: var(--gray-700); background: var(--gray-50); bord
 td { max-width: 420px; padding: 9px 11px; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
 tbody tr:last-child td { border-bottom: 0; }
 td code { display: block; max-width: 100%; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.validation-output summary { color: var(--blue-700); cursor: pointer; font-weight: 700; white-space: nowrap; }
+.validation-output pre { max-width: 520px; max-height: 180px; margin: 8px 0 0; padding: 9px; overflow: auto; color: #e9eef5; background: var(--navy-950); border: 1px solid #53657c; font: 10px/1.5 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.validation-output small { display: block; margin-top: 5px; color: var(--amber-800); }
 .audit-reference { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px; color: var(--gray-500); background: var(--gray-50); border-top: 1px solid var(--gray-300); font-size: 10px; }
 .audit-reference code { overflow: hidden; color: var(--gray-700); text-overflow: ellipsis; white-space: nowrap; }
 .compact-button { min-height: 28px; padding: 4px 9px; }

@@ -7,6 +7,8 @@ readonly function_name="aios-remediation-demo-ui"
 readonly repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ui_root="${repository_root}/agent3"
 readonly python_executable="${repository_root}/.venv/bin/python"
+readonly agent2_api="${VITE_AGENT2_API:-}"
+readonly agent4_api="${VITE_AGENT4_API:-}"
 
 for command_name in aws curl uv zip; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -24,6 +26,38 @@ if [[ ! -f "${ui_root}/backend/site/index.html" ]]; then
   echo "The production UI build is missing. Run make build first." >&2
   exit 1
 fi
+
+if [[ "$agent2_api" != "https://sz3tbpu564gwikyhk2j3f7jn6y0vsusz.lambda-url.ap-southeast-1.on.aws" ]]; then
+  echo "VITE_AGENT2_API does not match the approved production gateway." >&2
+  exit 1
+fi
+if [[ "$agent4_api" != "http://localhost:8000" && ! "$agent4_api" =~ ^https://[^/]+$ ]]; then
+  echo "VITE_AGENT4_API must be the accepted local fallback or an HTTPS origin without a path." >&2
+  exit 1
+fi
+
+verify_ui_asset() {
+  local asset_file="$1" marker
+  for marker in \
+    "View output" \
+    "View error" \
+    "Output was truncated by the validation limit." \
+    "Post-merge runs" \
+    "$agent2_api" \
+    "$agent4_api"; do
+    if ! grep -Fq -- "$marker" "$asset_file"; then
+      echo "The UI asset is missing the required release marker: ${marker}" >&2
+      return 1
+    fi
+  done
+}
+
+local_asset_path="$(find "${ui_root}/backend/site/assets" -maxdepth 1 -type f -name '*.js' -print -quit)"
+if [[ -z "$local_asset_path" ]]; then
+  echo "The production UI build does not contain a JavaScript asset." >&2
+  exit 1
+fi
+verify_ui_asset "$local_asset_path"
 
 actual_account="$(aws sts get-caller-identity --query Account --output text)"
 if [[ "$actual_account" != "$expected_account" ]]; then
@@ -85,7 +119,7 @@ rollback() {
 }
 
 smoke_checks() {
-  local function_url base_url health_file index_file asset_path runs_file probe_file
+  local function_url base_url health_file index_file asset_path asset_file runs_file probe_file
   function_url="$(
     aws lambda get-function-url-config \
       --function-name "$function_name" \
@@ -96,6 +130,7 @@ smoke_checks() {
   base_url="${function_url%/}"
   health_file="${work_dir}/health.json"
   index_file="${work_dir}/index.html"
+  asset_file="${work_dir}/asset.js"
   runs_file="${work_dir}/runs.json"
   probe_file="${work_dir}/probe.json"
 
@@ -109,7 +144,8 @@ smoke_checks() {
     echo "The deployed index did not reference a JavaScript asset." >&2
     return 1
   fi
-  curl --fail --silent --show-error --head "${base_url}${asset_path}" >/dev/null || return 1
+  curl --fail --silent --show-error "${base_url}${asset_path}" --output "$asset_file" || return 1
+  verify_ui_asset "$asset_file" || return 1
 
   curl --fail-with-body --silent --show-error "${base_url}/api/runs" --output "$runs_file" || return 1
   "$python_executable" -c 'import json,sys; data=json.load(open(sys.argv[1])); output=data["output"]; assert output["schema_version"] == "1.0"; assert isinstance(output["runs"], list); assert len(output["runs"]) <= 20' "$runs_file" || return 1

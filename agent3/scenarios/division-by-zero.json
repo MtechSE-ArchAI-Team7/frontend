@@ -32,7 +32,7 @@
     "provider": "GITHUB",
     "url": "https://github.com/MtechSE-ArchAI-Team7/buggy-ecommerce-demo.git",
     "base_branch": "main",
-    "commit_sha": "ae4d89601a5b858994ec88695d8c624ebc510750"
+    "commit_sha": "13ee0115fe7752707d2199600a06ef639aa3666b"
   },
   "upstream_correlation_id": "demo-ecommerce-average-001",
   "upstream_audit_refs": ["audit://demo/CASE-ECOM-AVG-001"]

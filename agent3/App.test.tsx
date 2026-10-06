@@ -103,7 +103,7 @@ describe("AIOS remediation console", () => {
       "/api/runs",
       expect.objectContaining({ method: "POST", body: expect.stringContaining("CASE-ECOM-AVG-001") }),
     );
-    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("ae4d89601a5b858994ec88695d8c624ebc510750");
+    expect(String(fetchMock.mock.calls[1][1]?.body)).toContain("13ee0115fe7752707d2199600a06ef639aa3666b");
     expect(String(fetchMock.mock.calls[1][1]?.body)).toContain('"jira_ticket_id":"TICKET-111"');
   });
 
@@ -322,6 +322,15 @@ describe("AIOS remediation console", () => {
                     stderr: "",
                     output_truncated: false,
                   },
+                  {
+                    task_name: "warning_output",
+                    outcome: "PASSED",
+                    exit_code: 0,
+                    duration_ms: 204,
+                    stdout: "stdout fallback must not replace stderr",
+                    stderr: "warning emitted on stderr",
+                    output_truncated: true,
+                  },
                 ],
               },
             ],
@@ -471,6 +480,17 @@ describe("AIOS remediation console", () => {
     );
     expect(screen.getByText("javascript_syntax")).toBeInTheDocument();
     expect(screen.getAllByText("average_regression").length).toBeGreaterThan(0);
+    const validationCard = screen.getByRole("heading", { name: "Validation" }).closest("section") as HTMLElement;
+    const emptyOutputRow = within(validationCard).getByText("javascript_syntax").closest("tr") as HTMLElement;
+    expect(within(emptyOutputRow).getByText("—")).toBeInTheDocument();
+    const standardOutputRow = within(validationCard).getByText("average_regression").closest("tr") as HTMLElement;
+    fireEvent.click(within(standardOutputRow).getByText("View output"));
+    expect(within(standardOutputRow).getByText("2 tests passed")).toBeInTheDocument();
+    const errorOutputRow = within(validationCard).getByText("warning_output").closest("tr") as HTMLElement;
+    fireEvent.click(within(errorOutputRow).getByText("View error"));
+    expect(within(errorOutputRow).getByText("warning emitted on stderr")).toBeInTheDocument();
+    expect(screen.queryByText("stdout fallback must not replace stderr")).not.toBeInTheDocument();
+    expect(within(errorOutputRow).getByText("Output was truncated by the validation limit.")).toBeInTheDocument();
     expect(screen.getAllByText("PASSED").some((item) => item.classList.contains("success"))).toBe(true);
     expect(screen.getByText("validation-results.json")).toBeInTheDocument();
     expect(screen.getByText("patch.diff")).toBeInTheDocument();

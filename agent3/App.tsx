@@ -751,13 +751,22 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
                   <header className="card-header"><div><h2>Validation</h2><p>{result.validation_attempts.length} recorded attempt{result.validation_attempts.length === 1 ? "" : "s"}.</p></div></header>
                   <div className="table-scroll">
                     <table>
-                      <thead><tr><th>Attempt</th><th>Task</th><th>Status</th><th>Duration</th></tr></thead>
+                      <thead><tr><th>Attempt</th><th>Task</th><th>Status</th><th>Duration</th><th>Output</th></tr></thead>
                       <tbody>
                         {result.validation_attempts.flatMap((attempt) => attempt.results.map((item) => (
                           <tr key={`${attempt.attempt}-${item.task_name}`}>
                             <td>{attempt.attempt}</td><td><code>{item.task_name}</code></td>
                             <td><span className={`status-badge ${statusTone(item.outcome)}`}>{item.outcome}</span></td>
                             <td>{item.duration_ms.toLocaleString()} ms</td>
+                            <td>
+                              {item.stderr || item.stdout ? (
+                                <details className="validation-output">
+                                  <summary>{item.stderr ? "View error" : "View output"}</summary>
+                                  <pre>{item.stderr || item.stdout}</pre>
+                                  {item.output_truncated && <small>Output was truncated by the validation limit.</small>}
+                                </details>
+                              ) : "—"}
+                            </td>
                           </tr>
                         )))}
                       </tbody>
