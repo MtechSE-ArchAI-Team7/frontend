@@ -56,7 +56,13 @@ Run details expose bounded validation stdout or stderr through `View output` and
 
 Normal releases use the manually dispatched **Deploy Agent 3 UI** workflow from `main`. The workflow runs `make check`, embeds the approved Agent 2 and Agent 4 browser endpoints, obtains short-lived AWS credentials through GitHub OIDC, and then updates the existing `aios-remediation-demo-ui` Lambda in AWS account `734849394833` and Region `ap-southeast-1`.
 
-The protected `production` environment must provide `AWS_UI_DEPLOY_ROLE_ARN`. The role must trust only this repository's `main` release workflow and grant only the calls needed to inspect and update the code package of:
+The repository Actions secret `AWS_UI_DEPLOY_ROLE_ARN` must contain the release role ARN. This private repository belongs to a GitHub Free organization, where environment secrets and deployment-branch protection are unavailable, so the workflow deliberately does not target a GitHub environment. The role's OIDC trust policy is the authoritative branch guard and must match only the immutable repository subject for `main`:
+
+```text
+repo:MtechSE-ArchAI-Team7@301624271/frontend@1388403410:ref:refs/heads/main
+```
+
+The role grants only the calls needed to inspect and update the code package of:
 
 ```text
 arn:aws:lambda:ap-southeast-1:734849394833:function:aios-remediation-demo-ui

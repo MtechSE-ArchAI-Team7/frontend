@@ -7,8 +7,9 @@ This repository is the shared browser shell for AIOS Agents 1–4. Keep changes 
 ## Production releases
 
 - Production UI releases must use `.github/workflows/deploy-agent3-ui.yaml` from `main`.
-- The workflow is manually dispatched and targets the protected `production` environment. A successful push does not authorize or trigger a deployment.
+- The workflow is manually dispatched from `main`. A successful push does not authorize or trigger a deployment.
 - Every dispatch requires explicit operator release authorization and the least-privilege `AWS_UI_DEPLOY_ROLE_ARN` GitHub Actions secret.
+- Because this private repository is in a GitHub Free organization, store the role ARN as a repository Actions secret and enforce `main` in the role's exact immutable OIDC subject. Do not weaken it to a repository-wide or wildcard subject.
 - Never add automatic production deployment for ordinary pushes, pull requests, dependency updates, security-control changes, runtime changes, or another agent's changes.
 - Do not run `aws lambda update-function-code`, `make deploy`, or `scripts/deploy_agent3_ui.sh` locally for a normal release. The local path is reserved for an explicitly authorized emergency operator repair and must preserve the same checks and rollback behavior.
 - Never create or modify IAM roles, Lambda configuration, Function URLs, AgentCore runtimes, or other infrastructure from this repository's release workflow.

@@ -28,7 +28,6 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    environment: production
     env:
       VITE_AGENT2_API: ${{ inputs.agent2-api-url }}
       VITE_AGENT4_API: ${{ inputs.agent4-api-url }}
@@ -43,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$AWS_UI_DEPLOY_ROLE_ARN" ]]; then
-            echo "The production environment is missing AWS_UI_DEPLOY_ROLE_ARN." >&2
+            echo "The repository is missing AWS_UI_DEPLOY_ROLE_ARN." >&2
             exit 1
           fi
           if [[ "$VITE_AGENT2_API" != "https://sz3tbpu564gwikyhk2j3f7jn6y0vsusz.lambda-url.ap-southeast-1.on.aws" ]]; then
