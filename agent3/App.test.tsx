@@ -152,6 +152,105 @@ describe("AIOS remediation console", () => {
     );
   });
 
+  it("shows a recovered inspection denial as a guardrail instead of a failed stage", async () => {
+    localStorage.setItem("aios-remediation-ecommerce-run-id", RUN_ID);
+    localStorage.setItem("aios-remediation-ecommerce-run-id:session", RUN_ID);
+    fetchMock
+      .mockResolvedValueOnce(response(runList("AWAITING_APPROVAL")))
+      .mockResolvedValueOnce(response(
+        runView("AWAITING_APPROVAL", {
+          approval_request: {
+            approval_id: "approval-guardrail",
+            case_id: "AH-56",
+            kind: "PLAN",
+            scope_digest: "sha256:guardrail",
+            summary: "Review the sensitive remediation plan.",
+            reasons: ["Review the sensitive remediation plan."],
+            requested_at: "2026-10-07T00:00:04Z",
+            status: "PENDING",
+          },
+          explainability: {
+            schema_version: "1.0",
+            run_id: RUN_ID,
+            status: "AWAITING_APPROVAL",
+            events: [
+              {
+                sequence: 1,
+                timestamp: "2026-10-07T00:00:00Z",
+                stage: "workspace",
+                actor_type: "DETERMINISTIC",
+                event_type: "WORKSPACE_CREATED",
+                status: "OK",
+                summary: "Created immutable workspace.",
+                policy_control_ids: [],
+              },
+              {
+                sequence: 2,
+                timestamp: "2026-10-07T00:00:01Z",
+                stage: "inspection",
+                actor_type: "TOOL",
+                event_type: "INSPECTION_TOOL_CALL",
+                status: "DENIED",
+                summary: "tool=get_file_contents; code=MUTABLE_REF_DENIED",
+                policy_control_ids: [],
+              },
+              {
+                sequence: 3,
+                timestamp: "2026-10-07T00:00:02Z",
+                stage: "inspection",
+                actor_type: "MODEL_ASSISTED",
+                event_type: "REPOSITORY_INSPECTED",
+                status: "OK",
+                summary: "Collected 5 commit-pinned artifacts through GitHub's hosted MCP server.",
+                policy_control_ids: [],
+              },
+              {
+                sequence: 4,
+                timestamp: "2026-10-07T00:00:03Z",
+                stage: "planning",
+                actor_type: "MODEL_ASSISTED",
+                event_type: "PLAN_CREATED",
+                status: "OK",
+                summary: "Prepared a bounded plan.",
+                policy_control_ids: [],
+              },
+            ],
+            inspection_tool_calls: [
+              {
+                call_id: "call-denied",
+                tool_name: "get_file_contents",
+                arguments: { path: "server.js", ref: "4575981b9ea8" },
+                status: "DENIED",
+                result_digest: "sha256:denied",
+              },
+              {
+                call_id: "call-pinned",
+                tool_name: "get_file_contents",
+                arguments: { path: "server.js", sha: "4575981b9ea8" },
+                status: "SUCCEEDED",
+                result_digest: "sha256:succeeded",
+              },
+            ],
+            evidence: [],
+            model_calls: [],
+          },
+        }),
+      ));
+    render(<App />);
+
+    openManualRun();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh saved run" }));
+
+    const inspectStep = (await screen.findByText("Inspect", { selector: ".workflow-steps strong" })).closest("li") as HTMLElement;
+    expect(within(inspectStep).getByText("complete", { selector: ".step-status" })).toBeInTheDocument();
+    expect(within(inspectStep).getByText(/1 guardrail action recovered/)).toBeInTheDocument();
+    expect(screen.getAllByText("GUARDRAIL").length).toBeGreaterThan(0);
+    expect(screen.getByText(
+      "Guardrail enforcement: rejected model-supplied ref; operator-bound SHA remains authoritative.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText("failed", { selector: ".workflow-steps .step-status" })).not.toBeInTheDocument();
+  });
+
   it("submits the exact approval binding and default reviewer", async () => {
     fetchMock
       .mockResolvedValueOnce(response(runList("READY")))

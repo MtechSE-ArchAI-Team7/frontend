@@ -9,7 +9,13 @@ import {
 import type { RecentRunV1 } from "./run-history";
 import toolCatalog from "./generated/tool-catalog.json";
 import divisionByZero from "./scenarios/division-by-zero.json";
-import type { ApprovalStatus, ArtifactRef, ExplainabilityTrace, RemediationRunView } from "./types";
+import type {
+  ApprovalStatus,
+  ArtifactRef,
+  ExplainabilityEvent,
+  ExplainabilityTrace,
+  RemediationRunView,
+} from "./types";
 
 const RUN_STORAGE_KEY = LEGACY_RUN_STORAGE_KEY;
 const SUCCESS_STATUSES = new Set(["DRAFT_PR_CREATED", "DRAFT_PR_PREPARED"]);
@@ -87,6 +93,21 @@ function statusTone(value: string): string {
   return "neutral";
 }
 
+function isInspectionGuardrail(event: ExplainabilityEvent): boolean {
+  return event.stage === "inspection" && event.event_type === "INSPECTION_TOOL_CALL" && event.status === "DENIED";
+}
+
+function eventStatusLabel(event: ExplainabilityEvent): string {
+  return isInspectionGuardrail(event) ? "GUARDRAIL" : displayStatus(event.status);
+}
+
+function eventSummary(event: ExplainabilityEvent): string {
+  if (isInspectionGuardrail(event) && event.summary.includes("code=MUTABLE_REF_DENIED")) {
+    return "Guardrail enforcement: rejected model-supplied ref; operator-bound SHA remains authoritative.";
+  }
+  return event.summary;
+}
+
 function workflowState(index: number, run: RemediationRunView | null, busy: boolean, successful: boolean): string {
   if (successful) return "complete";
   if (run?.explainability) return explanationStageState(run.explainability, WORKFLOW_TRACE_STAGES[index]);
@@ -107,11 +128,23 @@ function explanationStageState(
   stages: readonly string[],
 ): "complete" | "waiting" | "failed" | "pending" {
   const events = trace.events.filter((event) => stages.some((stage) => stage === event.stage));
+  const isInspection = stages.includes("inspection") && stages.includes("workspace");
+  if (isInspection) {
+    const completed = events.some((event) => event.event_type === "REPOSITORY_INSPECTED" && event.status === "OK");
+    if (completed) return "complete";
+    if (events.some((event) => !isInspectionGuardrail(event) && statusTone(event.status) === "error")) return "failed";
+    return "pending";
+  }
   if (events.some((event) => statusTone(event.status) === "error")) return "failed";
   if (events.some((event) => event.event_type === "APPROVAL_REQUESTED" && event.status === "PENDING")) {
     return "waiting";
   }
   return events.length > 0 ? "complete" : "pending";
+}
+
+function recoveredInspectionGuardrails(trace: ExplainabilityTrace | null | undefined): number {
+  if (!trace || explanationStageState(trace, WORKFLOW_TRACE_STAGES[1]) !== "complete") return 0;
+  return trace.inspection_tool_calls.filter((call) => call.status === "DENIED").length;
 }
 
 function formatArguments(argumentsValue: Record<string, unknown>): string {
@@ -298,9 +331,11 @@ function ExplainabilityPanel({ trace }: { trace: ExplainabilityTrace }) {
                   <div>
                     <div className="event-heading">
                       <strong>{displayStatus(event.event_type)}</strong>
-                      <span className={`status-badge ${statusTone(event.status)}`}>{displayStatus(event.status)}</span>
+                      <span className={`status-badge ${isInspectionGuardrail(event) ? "warning" : statusTone(event.status)}`} title={`Recorded status: ${event.status}`}>
+                        {eventStatusLabel(event)}
+                      </span>
                     </div>
-                    <p>{event.summary}</p>
+                    <p>{eventSummary(event)}</p>
                     {event.policy_control_ids.length > 0 && (
                       <div className="control-list" aria-label="Triggered policy controls">
                         {event.policy_control_ids.map((control) => <code key={control}>{control}</code>)}
@@ -323,7 +358,12 @@ function ExplainabilityPanel({ trace }: { trace: ExplainabilityTrace }) {
                     <li key={call.call_id}>
                       <span className="tool-sequence">{index + 1}</span>
                       <div>
-                        <div className="event-heading"><code>{call.tool_name}</code><span className={`status-badge ${statusTone(call.status)}`}>{call.status}</span></div>
+                        <div className="event-heading">
+                          <code>{call.tool_name}</code>
+                          <span className={`status-badge ${call.status === "DENIED" ? "warning" : statusTone(call.status)}`} title={`Recorded status: ${call.status}`}>
+                            {call.status === "DENIED" ? "GUARDRAIL" : call.status}
+                          </span>
+                        </div>
                         <p>{formatArguments(call.arguments)}</p>
                         <small>Result {shortDigest(call.result_digest)}</small>
                       </div>
@@ -683,10 +723,17 @@ export default function App({ homeSignal = 0 }: Agent3AppProps) {
                 <ol className="workflow-steps">
                   {WORKFLOW_STEPS.map(([label, description], index) => {
                     const state = workflowState(index, run, busy === "run", successful);
+                    const recoveredGuardrails = index === 1 ? recoveredInspectionGuardrails(run?.explainability) : 0;
                     return (
                       <li className={state} key={label}>
                         <span className="step-marker">{state === "complete" ? "✓" : index + 1}</span>
-                        <div><strong>{label}</strong><small>{description}</small></div>
+                        <div>
+                          <strong>{label}</strong>
+                          <small>
+                            {description}
+                            {recoveredGuardrails > 0 && ` · ${recoveredGuardrails} guardrail ${recoveredGuardrails === 1 ? "action" : "actions"} recovered`}
+                          </small>
+                        </div>
                         <span className={`step-status ${state}`}>{state}</span>
                       </li>
                     );

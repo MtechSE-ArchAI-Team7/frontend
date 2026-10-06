@@ -15,6 +15,10 @@ scripts/           Guarded deployment tooling
 
 Agent 3 is selected by default. Selecting Agent 1 leaves the workspace blank while keeping the shared headers available. The Agent 3, Agent 2, and Agent 4 consoles retain their state when another agent tab is selected.
 
+The Agent 3 console treats a denied inspection call as guardrail activity. It marks Inspect complete only when the
+trace contains the terminal `REPOSITORY_INSPECTED` event, and it keeps unrecovered inspection errors failed. This also
+corrects presentation of immutable older traces whose raw summary used `code=MUTABLE_REF_DENIED`.
+
 ## Agent 4 post-merge runs console
 
 Agent 4's tab reads the `eval_agent` receiver (source and deployment live in the `mcp-atlassian-agent` repository, `atlassian_agent.webhook`). The receiver serves read-only JSON with `Access-Control-Allow-Origin: *`, so no gateway of its own is needed.
