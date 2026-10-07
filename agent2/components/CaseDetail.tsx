@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GatewayError, describeError, getCase } from "../api";
+import { describeError, getCase } from "../api";
 import { count, duration, usd } from "../format";
 import { findSpan } from "../spans";
 import type { CaseView, SpanNode } from "../types";
@@ -15,10 +15,9 @@ type Tab = "waterfall" | "timeline" | "audit" | "logs";
 interface Props {
   caseId: string;
   sinceHours: number;
-  onUnauthorized: () => void;
 }
 
-export function CaseDetail({ caseId, sinceHours, onUnauthorized }: Props) {
+export function CaseDetail({ caseId, sinceHours }: Props) {
   const [view, setView] = useState<CaseView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -33,15 +32,14 @@ export function CaseDetail({ caseId, sinceHours, onUnauthorized }: Props) {
       .then(setView)
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
-        if (err instanceof GatewayError && err.status === 401) onUnauthorized();
-        else setError(describeError(err));
+        setError(describeError(err));
       })
       .finally(() => window.clearInterval(timer));
     return () => {
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [caseId, sinceHours, onUnauthorized]);
+  }, [caseId, sinceHours]);
 
   if (error) {
     return (

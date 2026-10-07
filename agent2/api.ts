@@ -1,7 +1,5 @@
 import type { CaseView, CasesResponse } from "./types";
 
-const TOKEN_KEY = "agent2-log-ui-token";
-
 // The page is shared by all agents but each agent's gateway is its own Lambda, so this
 // agent's API base is configurable at build time (VITE_AGENT2_API, e.g. the Function URL
 // of agent2-log-ui, no trailing slash). Unset means same origin, which is what the Vite dev
@@ -18,34 +16,8 @@ export class GatewayError extends Error {
   }
 }
 
-// sessionStorage, not localStorage: the token should not outlive the tab. Storage can
-// throw (private mode, blocked site data), in which case the token lives in memory only.
-let memoryToken: string | null = null;
-
-export function getToken(): string | null {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY) ?? memoryToken;
-  } catch {
-    return memoryToken;
-  }
-}
-
-export function setToken(token: string | null): void {
-  memoryToken = token;
-  try {
-    if (token === null) sessionStorage.removeItem(TOKEN_KEY);
-    else sessionStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    /* memory only */
-  }
-}
-
 async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const token = getToken();
-  const response = await fetch(`${API_BASE}${path}`, {
-    signal,
-    headers: token ? { authorization: `Bearer ${token}` } : {},
-  });
+  const response = await fetch(`${API_BASE}${path}`, { signal });
   let parsed: unknown;
   try {
     parsed = await response.json();
@@ -71,8 +43,8 @@ export function getCase(caseId: string, sinceHours: number, signal?: AbortSignal
 }
 
 const MESSAGES: Record<string, string> = {
-  UNAUTHORIZED: "The token was not accepted.",
-  GATEWAY_NOT_CONFIGURED: "The gateway is missing its configuration (token secret or log group).",
+  UNAUTHORIZED: "The gateway still asks for a token. Deploy the agent2-log-ui gateway without it.",
+  GATEWAY_NOT_CONFIGURED: "The gateway is missing its configuration (log group).",
   INVALID_CASE_ID: "That is not a valid case id.",
   INVALID_SINCE: "That time range is not allowed.",
   CLOUDWATCH_ACCESS_DENIED: "The gateway is not allowed to read CloudWatch.",

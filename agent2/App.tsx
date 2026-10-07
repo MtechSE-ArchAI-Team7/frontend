@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { GatewayError, describeError, getToken, listCases, setToken } from "./api";
+import { useEffect, useState } from "react";
+import { describeError, listCases } from "./api";
 import { CaseList } from "./components/CaseList";
 import { CaseDetail } from "./components/CaseDetail";
-import { TokenGate } from "./components/TokenGate";
 import type { CaseRow } from "./types";
 
 export const RANGES = [
@@ -26,47 +25,16 @@ function caseFromHash(): string | null {
   }
 }
 
+// No login: the gateway takes no token, so the tab opens straight onto the case list.
 export default function App({ active }: { active: boolean }) {
-  const [token, setTokenState] = useState<string | null>(getToken());
-  const [gateMessage, setGateMessage] = useState<string | null>(null);
-
-  const signOut = useCallback((message: string | null = null) => {
-    setToken(null);
-    setTokenState(null);
-    setGateMessage(message);
-  }, []);
-
   return (
     <div className="agent2-root">
-      {token ? (
-        <Shell
-          active={active}
-          onUnauthorized={() => signOut("The token was not accepted.")}
-          onSignOut={() => signOut()}
-        />
-      ) : (
-        <TokenGate
-          message={gateMessage}
-          onSubmit={(value) => {
-            setToken(value);
-            setTokenState(value);
-            setGateMessage(null);
-          }}
-        />
-      )}
+      <Shell active={active} />
     </div>
   );
 }
 
-function Shell({
-  active,
-  onUnauthorized,
-  onSignOut,
-}: {
-  active: boolean;
-  onUnauthorized: () => void;
-  onSignOut: () => void;
-}) {
+function Shell({ active }: { active: boolean }) {
   const [sinceHours, setSinceHours] = useState<number>(24);
   const [cases, setCases] = useState<CaseRow[] | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
@@ -96,11 +64,10 @@ function Shell({
       .then((body) => setCases(body.cases))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        if (error instanceof GatewayError && error.status === 401) onUnauthorized();
-        else setCasesError(describeError(error));
+        setCasesError(describeError(error));
       });
     return () => controller.abort();
-  }, [sinceHours, reloadKey, onUnauthorized]);
+  }, [sinceHours, reloadKey]);
 
   const select = (caseId: string) => {
     window.location.hash = `${HASH_PREFIX.slice(1)}${encodeURIComponent(caseId)}`;
@@ -126,9 +93,6 @@ function Shell({
           <button type="button" className="ghost" onClick={() => setReloadKey((k) => k + 1)}>
             Refresh
           </button>
-          <button type="button" className="ghost" onClick={onSignOut}>
-            Sign out
-          </button>
         </div>
       </header>
       <div className="layout">
@@ -139,7 +103,6 @@ function Shell({
               key={`${selected}:${sinceHours}:${reloadKey}`}
               caseId={selected}
               sinceHours={sinceHours}
-              onUnauthorized={onUnauthorized}
             />
           ) : (
             <div className="empty">

@@ -138,38 +138,6 @@
   font: inherit;
 }
 
-/* ---------------------------------------------------------------- token gate */
-
-.agent2-root .gate {
-  min-height: calc(100vh - 94px);
-  display: grid;
-  place-items: center;
-  padding: 16px;
-}
-.agent2-root .gate-card {
-  width: min(380px, 100%);
-  display: grid;
-  gap: 10px;
-  padding: 24px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  box-shadow: 0 1px 1px rgba(0, 28, 36, 0.04);
-}
-.agent2-root .gate-card h1 {
-  font-size: 18px;
-}
-.agent2-root .gate-card p {
-  margin: 0;
-}
-.agent2-root .gate-card label {
-  font-weight: 700;
-  font-size: 12px;
-}
-.agent2-root .gate-error {
-  color: var(--critical-ink);
-}
-
 /* ---------------------------------------------------------------- shell */
 
 /* Toolbar under the shared agent tabs. */
