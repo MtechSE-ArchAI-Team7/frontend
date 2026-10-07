@@ -22,14 +22,15 @@ describe("shared agent shell", () => {
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 
-  it.each(["Agent 1"])(`shows a blank workspace for %s`, (label) => {
+  it.each(["Agent 1"])(`shows the protected operator workspace for %s`, (label) => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${label}$`) }));
 
     expect(screen.getByRole("tab", { name: new RegExp(`^${label}$`) })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tabpanel")).toBeEmptyDOMElement();
+    expect(screen.getByLabelText("Access token")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Runs", hidden: true })).not.toBeVisible();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).startsWith("https://agent1.test"))).toBe(false);
   });
 
   it("does not mount Agent 4, or call its receiver, until its tab is first opened", () => {

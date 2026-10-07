@@ -1,8 +1,11 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
+import Agent1App from "../agent1/App";
 import Agent2App, { HASH_PREFIX as AGENT2_HASH_PREFIX } from "../agent2/App";
 import Agent3App from "../agent3/App";
 import Agent4App from "../agent4/App";
+
+const AGENT1_HASH_PREFIX = "#/agent1/";
 
 const AGENTS = [
   { id: "agent1", label: "Agent 1" },
@@ -14,10 +17,15 @@ const AGENTS = [
 export type AgentId = (typeof AGENTS)[number]["id"];
 
 export default function App() {
-  // A case link (#/agent2/AH-39) opens on Agent 2; everything else on the default agent.
+  // Agent links open directly; otherwise Agent 3 remains the default workspace.
   const [activeAgent, setActiveAgent] = useState<AgentId>(() =>
-    window.location.hash.startsWith(AGENT2_HASH_PREFIX) ? "agent2" : "agent3",
+    window.location.hash.startsWith(AGENT1_HASH_PREFIX)
+      ? "agent1"
+      : window.location.hash.startsWith(AGENT2_HASH_PREFIX)
+        ? "agent2"
+        : "agent3",
   );
+  const [agent1Opened, setAgent1Opened] = useState(activeAgent === "agent1");
   // Agent 2 calls its gateway as soon as it mounts, so it is not mounted until its tab is
   // first opened; after that it stays mounted like Agent 3, keeping its selection.
   const [agent2Opened, setAgent2Opened] = useState(activeAgent === "agent2");
@@ -33,6 +41,7 @@ export default function App() {
   });
 
   function selectAgent(agentId: AgentId) {
+    if (agentId === "agent1") setAgent1Opened(true);
     if (agentId === "agent2") setAgent2Opened(true);
     if (agentId === "agent4") setAgent4Opened(true);
     setActiveAgent(agentId);
@@ -68,7 +77,7 @@ export default function App() {
           <span>Singapore</span>
           <span className="utility-divider" />
           <span>Resolution service</span>
-          <span className="health-indicator"><i /> Available</span>
+          {activeAgent !== "agent1" && <span className="health-indicator"><i /> Available</span>}
         </div>
       </header>
 
@@ -118,16 +127,14 @@ export default function App() {
         {agent4Opened && <Agent4App />}
       </section>
 
-      {AGENTS.filter((agent) => agent.id === "agent1").map((agent) => (
-        <main
-          key={agent.id}
-          id={`agent-panel-${agent.id}`}
-          className="empty-agent-workspace"
-          role="tabpanel"
-          aria-labelledby={`agent-tab-${agent.id}`}
-          hidden={activeAgent !== agent.id}
-        />
-      ))}
+      <section
+        id="agent-panel-agent1"
+        role="tabpanel"
+        aria-labelledby="agent-tab-agent1"
+        hidden={activeAgent !== "agent1"}
+      >
+        {agent1Opened && <Agent1App active={activeAgent === "agent1"} />}
+      </section>
     </div>
   );
 }

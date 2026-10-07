@@ -6,14 +6,31 @@ This repository contains the shared browser shell for the AIOS demonstration and
 
 ```text
 shared/            Shared application entry point, utility header, agent navigation, and shell tests
-agent1/            Reserved for Agent 1; intentionally empty
+agent1/            Agent 1 helpdesk workflow console and CloudWatch gateway
 agent2/            Agent 2 log viewer (front end only; its gateway is deployed from the diagnosis-agent repository)
 agent3/            Resolution/remediation console and its Lambda gateway
 agent4/            Agent 4 post-merge runs console (front end only; reads the eval_agent receiver)
 scripts/           Guarded deployment tooling
 ```
 
-Agent 3 is selected by default. Selecting Agent 1 leaves the workspace blank while keeping the shared headers available. The Agent 3, Agent 2, and Agent 4 consoles retain their state when another agent tab is selected.
+Agent 3 is selected by default. Agent 1, Agent 2, and Agent 4 are mounted on first selection and retain their state when another agent tab is selected.
+
+## Agent 1 helpdesk operations console
+
+Agent 1 is a read-only operator view over structured helpdesk workflow events. It shows recent runs, their terminal outcome and triage summary, the deterministic routing gates and thresholds, and a timestamped workflow activity timeline. It polls every 15 seconds while its tab is active. A run without a terminal event is shown as running and marked stale after a minute without a new event; missing telemetry is not treated as proof that no action occurred.
+
+The UI reads a separately provisioned Agent 1 gateway. Set `VITE_AGENT1_API` to the gateway's HTTPS Function URL (no trailing slash) at build time. If it is unset, the tab clearly reports that its data source is not configured; it does not call Agent 3's `/api/runs` endpoint or display fabricated run status. Enter the gateway's bearer token when prompted; the token is kept in `sessionStorage` for the tab.
+
+The gateway source is `agent1/backend/handler.py`. Deploy it as a Python Lambda with a Function URL and configure:
+
+- `AGENT1_LOG_UI_TOKEN` — operator bearer token; supply/manage it through the deployment secret mechanism and never commit it or pass it to the browser build.
+- `HELPDESK_AGENT_LOG_GROUP` — exact CloudWatch log group receiving the helpdesk-agent container's application logs.
+- `AGENT1_LOG_UI_ALLOWED_ORIGINS` — comma-separated exact UI origins; avoid wildcard origins.
+- `AWS_REGION` — region containing the log group.
+
+Grant the gateway role only `logs:FilterLogEvents` on that log group. The handler exposes read-only `GET /api/runs?since_hours=24|72|168|336` and `GET /api/runs/<run-id>?since_hours=...`; it does not expose arbitrary CloudWatch queries, raw application logs, or log text. The Lambda's maximum event window is bounded, and its `partial` flag tells the UI when the configured limit was reached. The Function URL must require the application bearer token and match the same exact-origin CORS allowlist.
+
+The helpdesk agent emits versioned `agent_event=` records for workflow starts/finishes, named steps, and clarification/FAQ routing decisions. Its gateway filters only those records and returns allowlisted fields. Event case references are SHA-256-derived opaque identifiers; customer messages, raw prompts, and unrestricted log content are not displayed. CloudWatch ingestion/retention, gateway deployment, IAM, Function URL, secret setup, and build-time API URL remain operator-managed; this repository's Agent 3 release workflow does not provision or update them.
 
 The Agent 3 console treats a denied inspection call as guardrail activity. It marks Inspect complete only when the
 trace contains the terminal `REPOSITORY_INSPECTED` event, and it keeps unrecovered inspection errors failed. This also
