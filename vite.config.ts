@@ -4,7 +4,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: "agent3/backend/site",
+    // `make build` builds the shared shell twice: once for agent3's gateway
+    // (default outDir) and once for agent4's (BUILD_OUT_DIR). Same bundle —
+    // the agent4 gateway serves it and VITE_AGENT4_API decides where the
+    // verification console fetches runs from.
+    outDir: process.env.BUILD_OUT_DIR || "agent3/backend/site",
     emptyOutDir: true,
   },
   server: {

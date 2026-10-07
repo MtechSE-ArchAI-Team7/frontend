@@ -12,12 +12,14 @@ typecheck:
 
 test:
 	npm test
-	uv run pytest agent3/backend/test_handler.py
+	uv run pytest agent3/backend agent4/backend
 
 build:
 	npm run build
+	BUILD_OUT_DIR=agent4/backend/site npm run build
 
 check: sync typecheck test build
 
 deploy: check
 	bash scripts/deploy_agent3_ui.sh
+	bash scripts/deploy_agent4_ui.sh

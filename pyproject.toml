@@ -15,4 +15,5 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-testpaths = ["agent3/backend"]
+testpaths = ["agent3/backend", "agent4/backend"]
+addopts = "--import-mode=importlib"
