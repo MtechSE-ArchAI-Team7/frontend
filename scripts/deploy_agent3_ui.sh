@@ -7,6 +7,7 @@ readonly function_name="aios-remediation-demo-ui"
 readonly repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ui_root="${repository_root}/agent3"
 readonly python_executable="${repository_root}/.venv/bin/python"
+readonly agent1_api="${VITE_AGENT1_API:-}"
 readonly agent2_api="${VITE_AGENT2_API:-}"
 readonly agent4_api="${VITE_AGENT4_API:-}"
 
@@ -31,6 +32,10 @@ if [[ "$agent2_api" != "https://sz3tbpu564gwikyhk2j3f7jn6y0vsusz.lambda-url.ap-s
   echo "VITE_AGENT2_API does not match the approved production gateway." >&2
   exit 1
 fi
+if [[ ! "$agent1_api" =~ ^https://[A-Za-z0-9.-]+\.lambda-url\.ap-southeast-1\.on\.aws$ ]]; then
+  echo "VITE_AGENT1_API must be the Agent 1 HTTPS Lambda Function URL in ap-southeast-1." >&2
+  exit 1
+fi
 if [[ "$agent4_api" != "http://localhost:8000" && ! "$agent4_api" =~ ^https://[^/]+$ ]]; then
   echo "VITE_AGENT4_API must be the accepted local fallback or an HTTPS origin without a path." >&2
   exit 1
@@ -43,6 +48,7 @@ verify_ui_asset() {
     "View error" \
     "Output was truncated by the validation limit." \
     "Post-merge runs" \
+    "$agent1_api" \
     "$agent2_api" \
     "$agent4_api"; do
     if ! grep -Fq -- "$marker" "$asset_file"; then

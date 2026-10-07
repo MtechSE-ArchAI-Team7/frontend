@@ -3,6 +3,11 @@ name: Deploy Agent 3 UI
 on:
   workflow_dispatch:
     inputs:
+      agent1-api-url:
+        description: Public Agent 1 CloudWatch gateway Function URL without a trailing slash.
+        required: true
+        type: string
+        default: https://iaz3fqurfrqd3iitr75nysgcly0rufyj.lambda-url.ap-southeast-1.on.aws
       agent2-api-url:
         description: Public Agent 2 log gateway base URL without a trailing slash.
         required: true
@@ -29,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      VITE_AGENT1_API: ${{ inputs.agent1-api-url }}
       VITE_AGENT2_API: ${{ inputs.agent2-api-url }}
       VITE_AGENT4_API: ${{ inputs.agent4-api-url }}
     steps:
@@ -43,6 +49,10 @@ jobs:
           set -euo pipefail
           if [[ -z "$AWS_UI_DEPLOY_ROLE_ARN" ]]; then
             echo "The repository is missing AWS_UI_DEPLOY_ROLE_ARN." >&2
+            exit 1
+          fi
+          if [[ ! "$VITE_AGENT1_API" =~ ^https://[A-Za-z0-9.-]+\.lambda-url\.ap-southeast-1\.on\.aws$ ]]; then
+            echo "The Agent 1 gateway URL must be an HTTPS Lambda Function URL in ap-southeast-1, without a path or trailing slash." >&2
             exit 1
           fi
           if [[ "$VITE_AGENT2_API" != "https://sz3tbpu564gwikyhk2j3f7jn6y0vsusz.lambda-url.ap-southeast-1.on.aws" ]]; then

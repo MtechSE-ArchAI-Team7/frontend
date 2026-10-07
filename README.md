@@ -94,13 +94,16 @@ The workflow does not create the role, change IAM, or modify Lambda configuratio
 
 The deployment changes only the Lambda code package. It verifies the existing runtime, handler, ARM64 architecture, timeout, state, AWS account, compiled endpoint values, and protected Agent 3 feature markers before writing. After deployment it checks the health route, downloaded JavaScript asset and feature markers, bounded run listing, and explicit provider probe. A failed smoke check restores the previous package automatically. It never starts a remediation run, changes Lambda configuration, or provisions infrastructure.
 
-`make deploy` and `scripts/deploy_agent3_ui.sh` remain available only for an explicitly authorized emergency operator repair. They require both production build variables and enforce the same preflight and rollback checks as the workflow:
+`make deploy` and `scripts/deploy_agent3_ui.sh` remain available only for an explicitly authorized emergency operator repair. They require the production build URLs and enforce the same preflight and rollback checks as the workflow:
 
 ```bash
+VITE_AGENT1_API=https://<agent1-function-id>.lambda-url.ap-southeast-1.on.aws \
 VITE_AGENT2_API=https://sz3tbpu564gwikyhk2j3f7jn6y0vsusz.lambda-url.ap-southeast-1.on.aws \
 VITE_AGENT4_API=http://localhost:8000 \
 make deploy
 ```
+
+When manually running the `Deploy Agent 3 UI` workflow, enter the Agent 1 gateway Function URL in the required `agent1-api-url` input, just as the workflow asks for the Agent 2 and Agent 4 URLs. Use the HTTPS Lambda Function URL without a trailing slash; this is a public endpoint URL, not a secret.
 
 Required Lambda environment values remain operator-managed:
 
