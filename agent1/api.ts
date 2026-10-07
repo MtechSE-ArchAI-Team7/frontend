@@ -1,6 +1,5 @@
 import type { RunDetail, RunResponse, RunSummary, RunsResponse, WorkflowEvent } from "./types";
 
-const TOKEN_KEY = "agent1-log-ui-token";
 const API_BASE = (import.meta.env.VITE_AGENT1_API ?? "").replace(/\/+$/, "");
 export const isGatewayConfigured = Boolean(API_BASE);
 
@@ -14,36 +13,14 @@ export class GatewayError extends Error {
   }
 }
 
-let memoryToken: string | null = null;
-
-export function getToken(): string | null {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY) ?? memoryToken;
-  } catch {
-    return memoryToken;
-  }
-}
-
-export function setToken(token: string | null): void {
-  memoryToken = token;
-  try {
-    if (token === null) sessionStorage.removeItem(TOKEN_KEY);
-    else sessionStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // Keep the session usable when browser storage is unavailable.
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function request(path: string, signal?: AbortSignal): Promise<unknown> {
   if (!isGatewayConfigured) throw new GatewayError("GATEWAY_NOT_CONFIGURED", 503);
-  const token = getToken();
   const response = await fetch(`${API_BASE}${path}`, {
     signal,
-    headers: token ? { authorization: `Bearer ${token}` } : {},
   });
   let parsed: unknown;
   try {
@@ -114,8 +91,7 @@ export async function getRun(runId: string, sinceHours: number, signal?: AbortSi
 }
 
 const MESSAGES: Record<string, string> = {
-  UNAUTHORIZED: "The access token was not accepted.",
-  GATEWAY_NOT_CONFIGURED: "The Agent 1 log gateway is missing its token or CloudWatch log-group configuration.",
+  GATEWAY_NOT_CONFIGURED: "The Agent 1 log gateway is missing its CloudWatch log-group configuration.",
   INVALID_SINCE: "That time range is not allowed.",
   INVALID_RUN_ID: "That run identifier is not valid.",
   RUN_NOT_FOUND: "No Agent 1 events for that run were found in the selected time range.",

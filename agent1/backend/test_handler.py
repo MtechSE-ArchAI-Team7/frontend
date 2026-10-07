@@ -35,7 +35,6 @@ def handler(monkeypatch: pytest.MonkeyPatch) -> _HandlerModule:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setenv("AGENT1_LOG_UI_TOKEN", "operator-test-token")
     monkeypatch.setenv("HELPDESK_AGENT_LOG_GROUP", "/aws/test/helpdesk")
     monkeypatch.setenv("AGENT1_LOG_UI_ALLOWED_ORIGINS", "https://console.example")
     return cast(_HandlerModule, module)
@@ -75,12 +74,9 @@ def _event(
     method: str,
     path: str,
     *,
-    credential: str | None = "operator-test-token",
     query: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     headers = {"origin": "https://console.example"}
-    if credential is not None:
-        headers["authorization"] = f"Bearer {credential}"
     return {
         "rawPath": path,
         "requestContext": {"http": {"method": method}},
@@ -94,11 +90,17 @@ def _body(response: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.unit
-def test_gateway_requires_token_and_restricts_cors(handler: _HandlerModule) -> None:
-    denied = handler.lambda_handler(_event("GET", "/api/runs", credential="wrong"), None)
-    assert denied["statusCode"] == 401
-    assert _body(denied) == {"error": "UNAUTHORIZED"}
-    assert denied["headers"]["access-control-allow-origin"] == "https://console.example"
+def test_gateway_needs_no_ui_token_and_restricts_cors(
+    handler: _HandlerModule,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AGENT1_LOG_UI_TOKEN", raising=False)
+    handler._logs_client = _FakeLogs([])
+    response = handler.lambda_handler(_event("GET", "/api/runs"), None)
+    assert response["statusCode"] == 200
+    assert _body(response) == {"runs": [], "partial": False}
+    assert response["headers"]["access-control-allow-origin"] == "https://console.example"
+    assert response["headers"]["access-control-allow-headers"] == "content-type"
 
     forbidden = _event("GET", "/api/runs")
     forbidden["headers"]["origin"] = "https://attacker.example"

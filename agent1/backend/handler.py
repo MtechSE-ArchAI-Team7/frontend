@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
 import json
 import math
 import os
@@ -66,7 +65,7 @@ def _response(
     if origin and allowed_origins and origin in allowed_origins:
         headers["access-control-allow-origin"] = origin
         headers["access-control-allow-methods"] = "GET, OPTIONS"
-        headers["access-control-allow-headers"] = "authorization, content-type"
+        headers["access-control-allow-headers"] = "content-type"
         headers["vary"] = "Origin"
     return {
         "statusCode": status,
@@ -89,16 +88,6 @@ def _allowed_origins() -> set[str]:
         for value in os.environ.get("AGENT1_LOG_UI_ALLOWED_ORIGINS", "").split(",")
         if value.strip()
     }
-
-
-def _authorized(event: dict[str, Any], token: str) -> bool:
-    headers = event.get("headers")
-    if not isinstance(headers, dict):
-        return False
-    authorization = headers.get("authorization", headers.get("Authorization", ""))
-    if not isinstance(authorization, str) or not authorization.startswith("Bearer "):
-        return False
-    return hmac.compare_digest(authorization[7:], token)
 
 
 def _logs() -> Any:
@@ -309,12 +298,6 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return _response(204, None, origin=origin, allowed_origins=allowed_origins)
     if origin and allowed_origins and origin.rstrip("/") not in allowed_origins:
         return _response(403, {"error": "ORIGIN_NOT_ALLOWED"}, origin=origin, allowed_origins=allowed_origins)
-
-    token = os.environ.get("AGENT1_LOG_UI_TOKEN", "")
-    if not token:
-        return _response(503, {"error": "GATEWAY_NOT_CONFIGURED"}, origin=origin, allowed_origins=allowed_origins)
-    if not _authorized(event, token):
-        return _response(401, {"error": "UNAUTHORIZED"}, origin=origin, allowed_origins=allowed_origins)
 
     log_group = os.environ.get("HELPDESK_AGENT_LOG_GROUP", "")
     if not log_group:

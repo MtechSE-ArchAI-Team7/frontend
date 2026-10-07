@@ -22,15 +22,23 @@ describe("shared agent shell", () => {
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 
-  it.each(["Agent 1"])(`shows the protected operator workspace for %s`, (label) => {
+  it.each(["Agent 1"])(`shows the operator workspace for %s without an application token`, async (label) => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ runs: [], partial: false }),
+    } as Response);
     render(<App />);
 
     fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${label}$`) }));
 
     expect(screen.getByRole("tab", { name: new RegExp(`^${label}$`) })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByLabelText("Access token")).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Recent runs" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Runs", hidden: true })).not.toBeVisible();
-    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).startsWith("https://agent1.test"))).toBe(false);
+    const agent1Call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).startsWith("https://agent1.test"));
+    expect(agent1Call).toBeDefined();
+    expect(agent1Call?.[1]?.headers).toBeUndefined();
+    expect(sessionStorage.length).toBe(0);
   });
 
   it("does not mount Agent 4, or call its receiver, until its tab is first opened", () => {

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { describeError, GatewayError, getRun, getToken, isGatewayConfigured, listRuns, setToken } from "./api";
+import { useEffect, useMemo, useState } from "react";
+import { describeError, getRun, isGatewayConfigured, listRuns } from "./api";
 import type { RunDetail, RunSummary, WorkflowEvent } from "./types";
 
 const RUN_RANGES = [
@@ -69,45 +69,7 @@ function formatValue(value: string | number | boolean | string[]): string {
   return pretty(value);
 }
 
-function TokenGate({ message, onSubmit }: { message: string | null; onSubmit: (token: string) => void }) {
-  const [value, setValue] = useState("");
-  return (
-    <div className="agent1-gate">
-      <form
-        className="agent1-gate-card"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (value.trim()) onSubmit(value.trim());
-        }}
-      >
-        <span className="agent1-kicker">Restricted operator view</span>
-        <h1>Agent 1 · Helpdesk operations</h1>
-        <p>Enter the log gateway access token. It is kept in this browser tab only.</p>
-        <label htmlFor="agent1-access-token">Access token</label>
-        <input
-          id="agent1-access-token"
-          type="password"
-          autoComplete="off"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-        />
-        {message && <p className="agent1-error" role="alert">{message}</p>}
-        <button type="submit" disabled={!value.trim()}>Open operator view</button>
-      </form>
-    </div>
-  );
-}
-
 export default function Agent1App({ active }: { active: boolean }) {
-  const [token, setTokenState] = useState<string | null>(getToken());
-  const [gateMessage, setGateMessage] = useState<string | null>(null);
-
-  const signOut = useCallback((message: string | null = null) => {
-    setToken(null);
-    setTokenState(null);
-    setGateMessage(message);
-  }, []);
-
   return (
     <div className="agent1-root">
       {!isGatewayConfigured ? (
@@ -115,34 +77,17 @@ export default function Agent1App({ active }: { active: boolean }) {
           <section className="agent1-gate-card agent1-config-card" aria-labelledby="agent1-config-title">
             <span className="agent1-kicker">Operator data source</span>
             <h1 id="agent1-config-title">Agent 1 gateway is not configured</h1>
-            <p>Set <code>VITE_AGENT1_API</code> to the protected Agent 1 CloudWatch gateway URL and rebuild this UI. No run status is inferred or fabricated.</p>
+            <p>Set <code>VITE_AGENT1_API</code> to the Agent 1 CloudWatch gateway URL and rebuild this UI. No run status is inferred or fabricated.</p>
           </section>
         </div>
-      ) : token ? (
-        <Console active={active} onUnauthorized={() => signOut("The access token was not accepted.")} onSignOut={() => signOut()} />
       ) : (
-        <TokenGate
-          message={gateMessage}
-          onSubmit={(value) => {
-            setToken(value);
-            setTokenState(value);
-            setGateMessage(null);
-          }}
-        />
+        <Console active={active} />
       )}
     </div>
   );
 }
 
-function Console({
-  active,
-  onUnauthorized,
-  onSignOut,
-}: {
-  active: boolean;
-  onUnauthorized: () => void;
-  onSignOut: () => void;
-}) {
+function Console({ active }: { active: boolean }) {
   const [sinceHours, setSinceHours] = useState<number>(24);
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -173,8 +118,7 @@ function Console({
         setListError(null);
       } catch (error: unknown) {
         if (!alive || controller.signal.aborted) return;
-        if (error instanceof GatewayError && error.status === 401) onUnauthorized();
-        else setListError(describeError(error));
+        setListError(describeError(error));
       } finally {
         inFlight = false;
       }
@@ -190,7 +134,7 @@ function Console({
       window.clearInterval(timer);
       window.clearInterval(clockTimer);
     };
-  }, [active, sinceHours, refreshKey, onUnauthorized]);
+  }, [active, sinceHours, refreshKey]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -225,8 +169,7 @@ function Console({
         }
       } catch (error: unknown) {
         if (!alive || controller.signal.aborted) return;
-        if (error instanceof GatewayError && error.status === 401) onUnauthorized();
-        else setDetailError(describeError(error));
+        setDetailError(describeError(error));
       } finally {
         inFlight = false;
         if (alive) setDetailLoading(false);
@@ -242,7 +185,7 @@ function Console({
       controller?.abort();
       window.clearInterval(timer);
     };
-  }, [active, selected, sinceHours, refreshKey, onUnauthorized]);
+  }, [active, selected, sinceHours, refreshKey]);
 
   const visibleRuns = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -283,7 +226,6 @@ function Console({
             </select>
           </label>
           <button type="button" className="agent1-secondary" onClick={() => setRefreshKey((value) => value + 1)}>Refresh</button>
-          <button type="button" className="agent1-secondary" onClick={onSignOut}>Sign out</button>
         </div>
       </header>
 
@@ -292,6 +234,10 @@ function Console({
         <span>{listError ? "Data source unavailable" : runs === null ? "Connecting to CloudWatch event feed" : "CloudWatch event feed connected"}</span>
         <span className="agent1-muted">Refreshes every 15 seconds while this tab is open</span>
       </div>
+
+      <p className="agent1-notice agent1-notice-warning" role="note">
+        Gateway login is disabled. Anyone who can reach its URL may read the events returned by this gateway.
+      </p>
 
       {partial && (
         <p className="agent1-notice agent1-notice-warning" role="status">

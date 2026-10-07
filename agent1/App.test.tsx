@@ -93,19 +93,18 @@ describe("Agent 1 operator console", () => {
     vi.unstubAllGlobals();
   });
 
-  it("gates run visibility behind a session-only token", async () => {
+  it("loads run visibility without prompting for a token", async () => {
     render(<Agent1App active />);
-    fireEvent.change(screen.getByLabelText("Access token"), { target: { value: "operator-token" } });
-    fireEvent.click(screen.getByRole("button", { name: "Open operator view" }));
 
     expect(await screen.findByRole("heading", { name: "Recent runs" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /HELP-123/ }));
     expect(await screen.findByRole("heading", { name: "Why the workflow routed this way" })).toBeInTheDocument();
-    expect(sessionStorage.getItem("agent1-log-ui-token")).toBe("operator-token");
+    expect(sessionStorage.length).toBe(0);
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined();
   });
 
   it("shows the recorded gate, threshold, and explicit confidence caveat", async () => {
-    sessionStorage.setItem("agent1-log-ui-token", "operator-token");
     render(<Agent1App active />);
 
     fireEvent.click(await screen.findByRole("button", { name: /HELP-123/ }));
@@ -121,7 +120,6 @@ describe("Agent 1 operator console", () => {
   });
 
   it("opens a run from an Agent 1 deep link", async () => {
-    sessionStorage.setItem("agent1-log-ui-token", "operator-token");
     window.location.hash = "#/agent1/2db1f13e-7351-4a1f-a4c6-630646366d52";
     render(<Agent1App active />);
 
