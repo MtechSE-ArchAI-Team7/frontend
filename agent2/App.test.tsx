@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
-import { setToken } from "./api";
 import type { CaseView } from "./types";
 
 const CASE: CaseView = {
@@ -104,7 +103,6 @@ function mockFetch(route: Route) {
 }
 
 beforeEach(() => {
-  setToken(null);
   window.location.hash = "";
 });
 
@@ -113,29 +111,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("asks for the token first and sends it as a bearer header", async () => {
+test("opens straight onto the case list, with no token asked for or sent", async () => {
   const calls = mockFetch(() => ({ status: 200, body: { cases: [] } }));
   render(<App active />);
 
-  expect(calls).toHaveLength(0);
-  fireEvent.change(screen.getByLabelText("Access token"), { target: { value: "tok-123" } });
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
+  expect(screen.queryByLabelText("Access token")).not.toBeInTheDocument();
   await screen.findByText(/No case finished/);
-  expect(calls[0]).toEqual({ url: "/api/cases?since_hours=24", auth: "Bearer tok-123" });
-});
-
-test("a rejected token sends the user back to the gate with a reason", async () => {
-  setToken("stale");
-  mockFetch(() => ({ status: 401, body: { error: "UNAUTHORIZED" } }));
-  render(<App active />);
-
-  expect(await screen.findByRole("alert")).toHaveTextContent("The token was not accepted.");
-  expect(screen.getByLabelText("Access token")).toBeInTheDocument();
+  expect(calls[0]).toEqual({ url: "/api/cases?since_hours=24", auth: undefined });
 });
 
 test("opening a case shows requests, totals, and our spans without the auto-instrumented ones", async () => {
-  setToken("tok");
   mockFetch((url) =>
     url.startsWith("/api/cases/")
       ? { status: 200, body: CASE }
@@ -176,7 +161,6 @@ test("opening a case shows requests, totals, and our spans without the auto-inst
 });
 
 test("audit that is not connected says so instead of failing the page", async () => {
-  setToken("tok");
   window.location.hash = "#/agent2/AH-39";
   mockFetch((url) => (url.startsWith("/api/cases/") ? { status: 200, body: CASE } : { status: 200, body: { cases: [] } }));
   render(<App active />);
@@ -186,7 +170,6 @@ test("audit that is not connected says so instead of failing the page", async ()
 });
 
 test("record content is rendered as text, never as markup", async () => {
-  setToken("tok");
   window.location.hash = "#/agent2/AH-39";
   mockFetch((url) => (url.startsWith("/api/cases/") ? { status: 200, body: CASE } : { status: 200, body: { cases: [] } }));
   const { container } = render(<App active />);
@@ -202,7 +185,6 @@ test("another agent's hash link does not change the selected case", async () => 
   mockFetch((url) =>
     url.startsWith("/api/cases?") ? { status: 200, body: { cases: [] } } : { status: 200, body: CASE },
   );
-  setToken("tok");
   window.location.hash = "#/agent2/AH-39";
   render(<App active />);
   await screen.findByRole("heading", { name: "AH-39" });
@@ -218,7 +200,6 @@ test("the API base is configurable and a trailing slash is ignored", async () =>
   vi.resetModules();
   const api = await import("./api");
   const calls = mockFetch(() => ({ status: 200, body: { cases: [] } }));
-  api.setToken("tok");
 
   await api.listCases(24);
 

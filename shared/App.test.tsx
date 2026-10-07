@@ -109,7 +109,6 @@ describe("shared agent shell", () => {
   });
 
   it("does not mount Agent 2, or call its gateway, until its tab is first opened", () => {
-    sessionStorage.setItem("agent2-log-ui-token", "tok");
     render(<App />);
     const agent2Calls = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/api/cases"));
     expect(agent2Calls()).toHaveLength(0);
@@ -119,17 +118,18 @@ describe("shared agent shell", () => {
     expect(String(agent2Calls()[0][0])).toMatch(/\/api\/cases\?since_hours=24$/);
   });
 
-  it("shows Agent 2's token gate in its own tab and keeps Agent 3 untouched", () => {
+  it("shows Agent 2's logs in its own tab, with no token gate, and keeps Agent 3 untouched", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("tab", { name: /^Agent 2$/ }));
 
     expect(screen.getByRole("tab", { name: /^Agent 2$/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByLabelText("Access token")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Agent 2 logs" })).toBeVisible();
+    expect(screen.queryByLabelText("Access token")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Runs", hidden: true })).not.toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: /^Agent 3$/ }));
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
-    expect(screen.getByLabelText("Access token", { selector: "input" })).not.toBeVisible();
+    expect(screen.getByRole("heading", { name: "Agent 2 logs", hidden: true })).not.toBeVisible();
   });
 
   it("opens on Agent 2 for a case link, and leaves Agent 3 the default otherwise", () => {

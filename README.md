@@ -48,7 +48,7 @@ The current production release default intentionally keeps `VITE_AGENT4_API=http
 
 ## Agent 2 log viewer
 
-Agent 2's tab reads its own gateway, `agent2-log-ui` (source, tests, and deployment live in the diagnosis-agent repository). Every request needs the gateway's bearer token, which the tab asks for and keeps in `sessionStorage`.
+Agent 2's tab reads its own gateway, `agent2-log-ui` (source, tests, and deployment live in the diagnosis-agent repository). The gateway has no login, so the tab opens straight onto the case list and sends no token. Anyone who can reach the gateway's URL can read its (redacted) case data.
 
 - `VITE_AGENT2_API` sets the gateway's base URL at build time (its Function URL, no path). Unset means the page's own origin. The gateway must list the page's origin in `LOG_UI_ALLOWED_ORIGINS` (Terraform variable `allowed_origins` in diagnosis-agent `infra/log-ui`).
 - For local work, run the gateway's `dev_server.py` from diagnosis-agent (`127.0.0.1:8787`) and leave `VITE_AGENT2_API` unset: `npm run dev` proxies `/api/cases` to it.
