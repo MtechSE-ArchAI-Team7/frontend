@@ -74,6 +74,11 @@ export function CaseList({ cases, error, selected, sinceHours, onSelect }: Props
                 </span>
                 <span className="caserow-bottom">
                   <Status tone={tone} label={label} />
+                  {c.release && (
+                    <span className="muted small" title="Release cohort">
+                      {c.release}
+                    </span>
+                  )}
                   {c.requests > 1 && <span className="muted small">{c.requests} requests</span>}
                 </span>
               </button>

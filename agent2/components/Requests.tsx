@@ -15,6 +15,7 @@ export function Requests({ requests }: { requests: RequestRow[] }) {
             <th scope="col">Outcome</th>
             <th scope="col">Agent 3 delivery</th>
             <th scope="col">Jira</th>
+            <th scope="col">Release</th>
             <th scope="col" className="num">
               Warnings
             </th>
@@ -39,6 +40,7 @@ export function Requests({ requests }: { requests: RequestRow[] }) {
                 <td>
                   <BriefCell brief={r.jira} />
                 </td>
+                <td>{r.release ? <code>{r.release}</code> : <span className="muted">—</span>}</td>
                 <td className="num">{r.warnings || "—"}</td>
               </tr>
             );
