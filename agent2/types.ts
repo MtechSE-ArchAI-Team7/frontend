@@ -7,6 +7,9 @@ export interface CaseRow {
   first_seen: string;
   last_seen: string;
   requests: number;
+  // Release cohort that handled the case (diagnosis-agent docs/release-cohorts.md); null or
+  // absent for a request that carried no label, and from a backend that predates cohorts.
+  release?: string | null;
 }
 
 export interface CasesResponse {
@@ -26,6 +29,7 @@ export interface RequestRow {
   outcome: Brief | null;
   delivery: Brief | null;
   jira: Brief | null;
+  release?: string | null;
   warnings: number;
 }
 

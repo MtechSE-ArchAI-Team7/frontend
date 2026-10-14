@@ -160,6 +160,43 @@ test("opening a case shows requests, totals, and our spans without the auto-inst
   expect(window.location.hash).toBe("#/agent2/AH-39");
 });
 
+test("a case handled by a release cohort shows its release in the list and on its request", async () => {
+  const labelled: CaseView = {
+    ...CASE,
+    requests: CASE.requests.map((r) => ({ ...r, release: "v1_0_0" })),
+  };
+  mockFetch((url) =>
+    url.startsWith("/api/cases/")
+      ? { status: 200, body: labelled }
+      : {
+          status: 200,
+          body: {
+            cases: [
+              {
+                case_id: "AH-39",
+                outcome: "task_completed",
+                first_seen: "2026-09-23T06:12:24Z",
+                last_seen: "2026-09-23T06:12:24Z",
+                requests: 1,
+                release: "v1_0_0",
+              },
+              { case_id: "AH-40", outcome: "task_completed", first_seen: "x", last_seen: "x", requests: 1 },
+            ],
+          },
+        },
+  );
+  render(<App active />);
+
+  const row = await screen.findByRole("button", { name: /AH-39/ });
+  expect(within(row).getByTitle("Release cohort")).toHaveTextContent("v1_0_0");
+  expect(within(screen.getByRole("button", { name: /AH-40/ })).queryByTitle("Release cohort")).toBeNull();
+
+  fireEvent.click(row);
+  const requests = await screen.findByRole("table", { name: /Requests/ });
+  expect(within(requests).getByRole("columnheader", { name: "Release" })).toBeInTheDocument();
+  expect(within(requests).getByText("v1_0_0")).toBeInTheDocument();
+});
+
 test("audit that is not connected says so instead of failing the page", async () => {
   window.location.hash = "#/agent2/AH-39";
   mockFetch((url) => (url.startsWith("/api/cases/") ? { status: 200, body: CASE } : { status: 200, body: { cases: [] } }));
