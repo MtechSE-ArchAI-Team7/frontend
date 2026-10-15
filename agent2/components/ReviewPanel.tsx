@@ -13,7 +13,7 @@ import {
   reviewerProblem,
   toLocalInput,
 } from "../review";
-import type { Hypothesis, QuarantinedEvidence, RequestRow, ReviewView } from "../types";
+import type { HandoffPreview, Hypothesis, QuarantinedEvidence, RequestRow, ReviewView } from "../types";
 
 // Everything this panel shows from the API is text and is rendered as text: React children
 // and attribute values only. No dangerouslySetInnerHTML, no Markdown, no auto-linking. A held
@@ -247,10 +247,16 @@ function ApproveForm({
   const { state, error, submit, locked } = useSubmit(onHandedOver);
   const marker = view.marker ?? "";
   const chosen = hypotheses.find((h) => h.rank === rank);
-  const ready = hypotheses.length > 0 && marker !== "" && reviewerProblem(reviewer) === null;
+  const approved = view.already_approved === true;
+  const ready = !approved && hypotheses.length > 0 && marker !== "" && reviewerProblem(reviewer) === null;
 
   return (
     <>
+      {approved && (
+        <p className="notice" role="note">
+          Already approved: this diagnosis was approved and delivered, and cannot be approved again.
+        </p>
+      )}
       <TextList title="Why it was held" items={[...(view.limitations ?? []), ...(view.advisories ?? [])]} />
 
       <fieldset className="hypotheses" disabled={confirming || locked}>
@@ -260,6 +266,8 @@ function ApproveForm({
           <HypothesisChoice key={h.rank} h={h} checked={h.rank === rank} onPick={() => setRank(h.rank)} />
         ))}
       </fieldset>
+
+      <Preview previews={view.handoff_preview ?? null} rank={rank} />
 
       <Quarantined items={view.quarantined ?? []} />
 
@@ -271,7 +279,7 @@ function ApproveForm({
             if (ready) setConfirming(true);
           }}
         >
-          <ReviewerField value={reviewer} onChange={setReviewer} disabled={locked} />
+          <ReviewerField value={reviewer} onChange={setReviewer} disabled={locked || approved} />
           <div>
             <button type="submit" disabled={!ready}>
               Approve…
@@ -291,7 +299,7 @@ function ApproveForm({
           <div className="actions">
             <button
               type="button"
-              disabled={locked}
+              disabled={locked || approved}
               onClick={() =>
                 submit("approve", () => approve(taskId, release, { reviewer: reviewer.trim(), marker, rank }))
               }
@@ -326,6 +334,42 @@ function HypothesisChoice({ h, checked, onPick }: { h: Hypothesis; checked: bool
         {h.reasoning && <span className="muted small hypothesis-reasoning">{h.reasoning}</span>}
       </span>
     </label>
+  );
+}
+
+// What Agent 2 would send to Agent 3 for the chosen rank, so the reviewer approves what
+// leaves and not only the ranking. Shown as JSON text: issue_summary and supporting_evidence
+// may carry words an attacker wrote.
+function Preview({ previews, rank }: { previews: HandoffPreview[] | null; rank: number }) {
+  const preview = previews?.find((p) => p.rank === rank);
+  let body;
+  if (!previews) {
+    body = <p className="muted">No preview yet: Agent 2 returned none for this diagnosis.</p>;
+  } else if (!preview) {
+    body = <p className="muted">Agent 2 did not answer for rank {rank}.</p>;
+  } else if (!preview.handoff) {
+    body = (
+      <p className="notice">
+        Agent 2 would not send rank {rank}
+        {preview.reason ? `: ${preview.reason}` : "."}
+      </p>
+    );
+  } else {
+    body = (
+      <>
+        <p className="muted small">
+          Built as approved by the placeholder “reviewer”, so upstream_audit_refs shows human-approved-by:reviewer.
+          On a real approval that becomes your name; everything else is what is sent.
+        </p>
+        <pre className="excerpt preview">{JSON.stringify(preview.handoff, null, 2)}</pre>
+      </>
+    );
+  }
+  return (
+    <section>
+      <h4>What Agent 3 would receive (rank {rank})</h4>
+      {body}
+    </section>
   );
 }
 
