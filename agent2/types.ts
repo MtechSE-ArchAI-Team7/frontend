@@ -131,8 +131,18 @@ export interface QuarantinedEvidence {
   source_tool?: string | null;
   uri?: string | null;
   excerpt?: string | null;
-  // Detection reasons, when the review function sends them.
+  // Detection reasons, when the gateway sends them.
   reasons?: string[];
+}
+
+// Agent 2's dry run of an approval for one rank (diagnosis-agent log-ui/review/review.py
+// preview_from). handoff is the DiagnosisHandoffV1 it would send, built as approved by the
+// placeholder "reviewer"; null when it would not send this rank, with the reason.
+export interface HandoffPreview {
+  rank: number;
+  handoff: Record<string, unknown> | null;
+  reason: string | null;
+  already_claimed: boolean | null;
 }
 
 export interface CaseScope {
@@ -152,11 +162,27 @@ export interface ReviewView {
   quarantined?: QuarantinedEvidence[];
   limitations?: string[];
   advisories?: string[];
+  // null when Agent 2 gave no preview at all; a rank missing from the list got no answer.
+  handoff_preview?: HandoffPreview[] | null;
+  // The diagnosis was approved and delivered; Agent 2 refuses a second approval.
+  already_approved?: boolean;
+  // A review action's own task that ended FAILED: Agent 2's refusal, from its status message
+  // ({"refused": true, "reason"} for its review limits, {"approved": false, "reason"} for an
+  // approval refused by the claim or the marker check).
+  refused?: boolean;
+  approved?: boolean;
+  reason?: string | null;
   // no_diagnosis / missing_fields
   needs?: ({ question?: string } | string)[];
   case_scope?: CaseScope | null;
   missing_fields?: string[];
   known_services?: string[];
+}
+
+// 202 from an action: the new task Agent 2 started for it.
+export interface ActionStarted {
+  accepted: boolean;
+  task_id?: string | null;
 }
 
 export interface ApproveBody {

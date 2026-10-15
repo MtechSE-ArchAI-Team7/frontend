@@ -1,7 +1,7 @@
 import type { RequestRow } from "./types";
 
 // What the review panel needs that is not in the API: which rows get a badge, the reviewer
-// rule, and the time-window conversions. The review function and Agent 2 check everything
+// rule, and the time-window conversions. The gateway and Agent 2 check everything
 // again; these are for a useful form, not for safety.
 
 export type Badge = "held" | "no_diagnosis";
@@ -67,8 +67,10 @@ export function fromLocalInput(value: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-// After an action is handed over, the case view is read again on this schedule until a
-// request row it did not have before shows up. A re-investigation logs its row as it starts;
-// an approval when Agent 2 has checked and delivered it.
+// After an action is started, two things are read until a deadline: the action's own task,
+// for Agent 2's answer (it may still refuse: its review limits, the approval claim), and the
+// case view, for the request row the task logs. An approval is checked in seconds; a
+// re-investigation runs up to 300 s before it ends.
+export const TASK_POLL_INTERVAL_MS = 5_000;
 export const POLL_INTERVAL_MS = 10_000;
-export const POLL_DURATION_MS = 5 * 60_000;
+export const WATCH_DURATION_MS = { approve: 2 * 60_000, reinvestigate: 6 * 60_000 } as const;
