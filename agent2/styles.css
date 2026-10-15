@@ -718,6 +718,14 @@
 .agent2-root .drawer.review:focus {
   outline: none;
 }
+.agent2-root .drawer.review code {
+  padding: 1px 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--grid);
+  border-radius: 2px;
+}
 .agent2-root .drawer.review section,
 .agent2-root .review-form {
   display: grid;

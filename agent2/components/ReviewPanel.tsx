@@ -40,7 +40,7 @@ export function ReviewPanel({ row, badge, caseId, later, onClose, onHandedOver }
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    ref.current?.focus();
+    ref.current?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
