@@ -1,26 +1,23 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { GatewayError, approve, describeReviewError, getReview, reinvestigate, reviewConfigured } from "../api";
+import { GatewayError, approve, describeReviewError, getReview, notStarted, reinvestigate } from "../api";
 import { dateTime } from "../format";
 import {
   BADGE_LABEL,
   type Badge,
   CONTEXT_MAX_LENGTH,
   MAX_SERVICES,
-  POLL_DURATION_MS,
-  POLL_INTERVAL_MS,
   REVIEWER_MAX_LENGTH,
   fromLocalInput,
   reviewerProblem,
   toLocalInput,
 } from "../review";
-import type { HandoffPreview, Hypothesis, QuarantinedEvidence, RequestRow, ReviewView } from "../types";
+import type { ActionStarted, HandoffPreview, Hypothesis, QuarantinedEvidence, RequestRow, ReviewView } from "../types";
+import { type ReviewAction, type Started, type Watch, WatchStatus } from "./ActionWatch";
 
 // Everything this panel shows from the API is text and is rendered as text: React children
 // and attribute values only. No dangerouslySetInnerHTML, no Markdown, no auto-linking. A held
 // case is held because someone may have planted instructions in it, so the reader is the
 // target (diagnosis-agent docs/log-ui-review-actions.md §4a).
-
-export type ReviewAction = "approve" | "reinvestigate";
 
 interface Props {
   row: RequestRow;
@@ -29,14 +26,15 @@ interface Props {
   // Requests on the case that started after this one: an approval or re-investigation
   // someone already asked for.
   later: RequestRow[];
+  // What became of an action this panel started.
+  watch: Watch | null;
   onClose: () => void;
-  onHandedOver: (action: ReviewAction) => void;
+  onStarted: (started: Started) => void;
 }
 
-export function ReviewPanel({ row, badge, caseId, later, onClose, onHandedOver }: Props) {
+export function ReviewPanel({ row, badge, caseId, later, watch, onClose, onStarted }: Props) {
   const [view, setView] = useState<ReviewView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const configured = reviewConfigured();
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -44,7 +42,6 @@ export function ReviewPanel({ row, badge, caseId, later, onClose, onHandedOver }
   }, []);
 
   useEffect(() => {
-    if (!configured) return;
     const controller = new AbortController();
     getReview(row.task_id, row.release, controller.signal)
       .then(setView)
@@ -53,17 +50,13 @@ export function ReviewPanel({ row, badge, caseId, later, onClose, onHandedOver }
         setError(describeReviewError(err));
       });
     return () => controller.abort();
-  }, [row.task_id, row.release, configured]);
+  }, [row.task_id, row.release]);
 
   const release = view?.release ?? row.release ?? null;
+  const onHandedOver = (action: ReviewAction, started: ActionStarted | null) =>
+    onStarted({ action, sourceTaskId: row.task_id, release, taskId: started?.task_id ?? null });
   let body;
-  if (!configured) {
-    body = (
-      <p className="error" role="alert">
-        This build has no review function: VITE_AGENT2_REVIEW_API was not set.
-      </p>
-    );
-  } else if (error) {
+  if (error) {
     body = (
       <p className="error" role="alert">
         {error}
@@ -120,6 +113,7 @@ export function ReviewPanel({ row, badge, caseId, later, onClose, onHandedOver }
         </p>
       )}
       {body}
+      {watch && <WatchStatus watch={watch} />}
     </aside>
   );
 }
@@ -127,61 +121,67 @@ export function ReviewPanel({ row, badge, caseId, later, onClose, onHandedOver }
 // ---------------------------------------------------------------- shared form parts
 
 type Sending = "idle" | "sending" | "handed" | "unknown";
+type HandedOver = (action: ReviewAction, started: ActionStarted | null) => void;
 
-// One POST per click: the button disables before the request goes out. A refusal (4xx)
-// means nothing was handed over, so the form opens again; anything else may have been, so it
-// stays shut and the case view is watched instead.
-function useSubmit(onHandedOver: (action: ReviewAction) => void) {
+// One POST per click: the button disables before the request goes out. A refusal (4xx), or
+// Agent 2 not taking the task (502 AGENT2_UNAVAILABLE), means nothing was started, so the
+// form opens again; anything else may have started it, so the form stays shut and the case
+// view is watched instead.
+function useSubmit(onHandedOver: HandedOver) {
   const [state, setState] = useState<Sending>("idle");
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
 
-  const submit = (action: ReviewAction, send: () => Promise<unknown>) => {
+  const submit = (action: ReviewAction, send: () => Promise<ActionStarted>) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setState("sending");
     setError(null);
     send()
-      .then(() => {
+      .then((started) => {
         setState("handed");
-        onHandedOver(action);
+        onHandedOver(action, started);
       })
       .catch((err: unknown) => {
+        if (notStarted(err)) {
+          inFlight.current = false;
+          setState("idle");
+          setError("Agent 2 did not take it, so nothing was started. Try again in a moment.");
+          return;
+        }
         if (err instanceof GatewayError && err.status >= 400 && err.status < 500) {
           inFlight.current = false;
           setState("idle");
-          setError(describeReviewError(err));
+          setError(`Refused: ${describeReviewError(err)}`);
           return;
         }
         setState("unknown");
         setError(describeReviewError(err));
-        onHandedOver(action);
+        onHandedOver(action, null);
       });
   };
   return { state, error, submit, locked: state !== "idle" };
 }
 
 function SubmitOutcome({ state, error, what }: { state: Sending; error: string | null; what: string }) {
-  const minutes = Math.round(POLL_DURATION_MS / 60_000);
-  const watching = `The case view is read every ${POLL_INTERVAL_MS / 1000} s for ${minutes} min; the new request appears in its table.`;
   if (state === "handed") {
     return (
       <p className="handed" role="status">
-        Handed over. Agent 2 checks {what} again and is the one that decides. {watching}
+        Agent 2 has {what} as a new task. That is not its answer yet: Agent 2 checks it again and may still refuse it.
       </p>
     );
   }
   if (state === "unknown") {
     return (
       <p className="error" role="alert">
-        {error} It is not known whether {what} was handed over, so the button stays off. {watching}
+        {error} It is not known whether Agent 2 took {what}, so the button stays off.
       </p>
     );
   }
   if (error) {
     return (
       <p className="error" role="alert">
-        Refused: {error}
+        {error}
       </p>
     );
   }
@@ -237,7 +237,7 @@ function ApproveForm({
   view: ReviewView;
   taskId: string;
   release: string | null;
-  onHandedOver: (action: ReviewAction) => void;
+  onHandedOver: HandedOver;
 }) {
   const hypotheses = view.hypotheses ?? [];
   const ranks = hypotheses.map((h) => h.rank);
@@ -426,12 +426,12 @@ function ReinvestigateForm({
   taskId: string;
   caseId: string;
   release: string | null;
-  onHandedOver: (action: ReviewAction) => void;
+  onHandedOver: HandedOver;
 }) {
   const scope = view.case_scope ?? {};
   const scoped = scope.affected_services ?? [];
   const known = view.known_services ?? [];
-  // An empty list means the review function accepts any service; then the run's own scope
+  // An empty list means the gateway accepts any service; then the run's own scope
   // is all there is to offer.
   const options = known.length > 0 ? known : scoped;
   const [services, setServices] = useState<string[]>(() => scoped.filter((s) => options.includes(s)));
@@ -484,7 +484,7 @@ function ReinvestigateForm({
         <fieldset disabled={locked}>
           <legend>Affected services</legend>
           {options.length === 0 ? (
-            <p className="muted small">The review function lists no services to choose from.</p>
+            <p className="muted small">The gateway lists no services to choose from.</p>
           ) : (
             <div className="services">
               {options.map((s) => (

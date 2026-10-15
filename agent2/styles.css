@@ -740,8 +740,12 @@
   background: var(--accent-wash);
 }
 .agent2-root .watch {
-  margin: 0;
+  display: grid;
+  gap: 4px;
   color: var(--ink-2);
+}
+.agent2-root .watch p {
+  margin: 0;
 }
 .agent2-root .notice {
   margin: 0;

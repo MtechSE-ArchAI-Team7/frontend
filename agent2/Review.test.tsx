@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
-import { POLL_INTERVAL_MS, reviewBadge, reviewerProblem } from "./review";
+import { POLL_INTERVAL_MS, TASK_POLL_INTERVAL_MS, reviewBadge, reviewerProblem } from "./review";
 import type { CaseView, RequestRow, ReviewView } from "./types";
 
 const HELD_ROW: RequestRow = {
@@ -162,7 +162,7 @@ test("a held request opens the approve panel, and every text from the API is sho
 
 test("approving asks for a name, repeats marker and rank, and sends once", async () => {
   const calls = mockFetch((url, init) => {
-    if (init?.method === "POST") return { status: 202, body: { accepted: true } };
+    if (init?.method === "POST") return { status: 202, body: { accepted: true, task_id: "t9" } };
     if (url.startsWith("/api/review/")) return { status: 200, body: HELD };
     if (url.startsWith("/api/cases/")) return { status: 200, body: caseWith([HELD_ROW]) };
     return { status: 200, body: { cases: [] } };
@@ -189,7 +189,7 @@ test("approving asks for a name, repeats marker and rank, and sends once", async
   fireEvent.click(send);
   expect(send).toBeDisabled();
 
-  expect(await within(panel).findByText(/Handed over/)).toBeInTheDocument();
+  expect(await within(panel).findByText(/Agent 2 has the approval as a new task/)).toHaveTextContent(/may still refuse it/);
   const posts = calls.filter((c) => c.method === "POST");
   expect(posts).toEqual([
     {
@@ -198,10 +198,11 @@ test("approving asks for a name, repeats marker and rank, and sends once", async
       body: { reviewer: "Dana Lim", marker: "0123456789abcdef", rank: 2 },
     },
   ]);
-  expect(screen.getByText(/Waiting for the approval/)).toBeInTheDocument();
+  // In the panel and above the requests table.
+  expect(screen.getAllByText(/Agent 2 has the approval as task/)).toHaveLength(2);
 });
 
-test("a refusal shows the review function's reason and lets the reviewer try again", async () => {
+test("a refusal shows the gateway's reason and lets the reviewer try again", async () => {
   mockFetch((url, init) => {
     if (init?.method === "POST") {
       return { status: 409, body: { error: "REFUSED", reason: "the diagnosis on this task is not the one you read; reload it" } };
@@ -218,12 +219,12 @@ test("a refusal shows the review function's reason and lets the reviewer try aga
 
   expect(await within(panel).findByRole("alert")).toHaveTextContent(/Refused: the diagnosis on this task is not the one/);
   expect(within(panel).getByRole("button", { name: "Confirm approval" })).toBeEnabled();
-  expect(screen.queryByText(/Waiting for the approval/)).toBeNull();
+  expect(screen.queryByText(/as task/)).toBeNull();
 });
 
 test("re-investigating pre-fills the last run's scope, limited to known services, and starts a new task", async () => {
   const calls = mockFetch((url, init) => {
-    if (init?.method === "POST") return { status: 202, body: { accepted: true } };
+    if (init?.method === "POST") return { status: 202, body: { accepted: true, task_id: "t3" } };
     if (url.startsWith("/api/review/")) return { status: 200, body: NO_DIAGNOSIS };
     if (url.startsWith("/api/cases/")) return { status: 200, body: caseWith([NO_DIAGNOSIS_ROW]) };
     return { status: 200, body: { cases: [] } };
@@ -250,7 +251,7 @@ test("re-investigating pre-fills the last run's scope, limited to known services
   fireEvent.click(start);
   expect(start).toBeDisabled();
 
-  expect(await within(panel).findByText(/Handed over/)).toBeInTheDocument();
+  expect(await within(panel).findByText(/Agent 2 has the request as a new task/)).toBeInTheDocument();
   const posts = calls.filter((c) => c.method === "POST");
   expect(posts).toEqual([
     {
@@ -267,7 +268,7 @@ test("re-investigating pre-fills the last run's scope, limited to known services
   ]);
 });
 
-test("after handing over, the case view is read every 10 s until the new request row appears", async () => {
+test("after a 202, the new task is read every 5 s and the case view every 10 s until each has an answer", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   const reinvestigation: RequestRow = {
     ...NO_DIAGNOSIS_ROW,
@@ -277,14 +278,30 @@ test("after handing over, the case view is read every 10 s until the new request
     first_seen: "2026-09-23T08:00:00Z",
     outcome: null,
   };
+  // Someone else's request on the same case is not this one.
+  const other: RequestRow = { ...reinvestigation, task_id: "t8", requested_by: "Sam" };
   let caseReads = 0;
-  mockFetch((url, init) => {
-    if (init?.method === "POST") return { status: 202, body: { accepted: true } };
+  let taskReads = 0;
+  const calls = mockFetch((url, init) => {
+    if (init?.method === "POST") return { status: 202, body: { accepted: true, task_id: "t3" } };
+    if (url.startsWith("/api/review/tasks/t3")) {
+      taskReads += 1;
+      const done = taskReads > 1;
+      return {
+        status: 200,
+        body: {
+          task_id: "t3",
+          kind: done ? "no_diagnosis" : "working",
+          state: done ? "TASK_STATE_COMPLETED" : "TASK_STATE_WORKING",
+          release: null,
+        },
+      };
+    }
     if (url.startsWith("/api/review/")) return { status: 200, body: NO_DIAGNOSIS };
     if (url.startsWith("/api/cases/")) {
       caseReads += 1;
-      // First read, then one poll with nothing new, then the new row.
-      return { status: 200, body: caseWith(caseReads < 3 ? [NO_DIAGNOSIS_ROW] : [NO_DIAGNOSIS_ROW, reinvestigation]) };
+      const rows = caseReads === 1 ? [NO_DIAGNOSIS_ROW] : caseReads === 2 ? [NO_DIAGNOSIS_ROW, other] : [NO_DIAGNOSIS_ROW, other, reinvestigation];
+      return { status: 200, body: caseWith(rows) };
     }
     return { status: 200, body: { cases: [] } };
   });
@@ -292,24 +309,89 @@ test("after handing over, the case view is read every 10 s until the new request
   await within(panel).findByText(/What would help/);
   fireEvent.change(within(panel).getByLabelText("Your name"), { target: { value: "Dana" } });
   fireEvent.click(within(panel).getByRole("button", { name: "Start a new investigation" }));
-  expect(await screen.findByText(/Waiting for the re-investigation/)).toBeInTheDocument();
+  expect(await within(panel).findByText(/Agent 2 has the re-investigation as task/)).toBeInTheDocument();
   expect(caseReads).toBe(1);
 
-  await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS));
+  await act(() => vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS));
+  expect(taskReads).toBe(1);
+  expect(calls.find((c) => c.url.startsWith("/api/review/tasks/t3"))?.url).toBe("/api/review/tasks/t3");
+  expect(within(panel).getByText(/as task.*\(Working\)/)).toBeInTheDocument();
+
+  await act(() => vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS));
+  expect(taskReads).toBe(2);
   expect(caseReads).toBe(2);
-  expect(screen.getByText(/Waiting for the re-investigation/)).toBeInTheDocument();
+  expect(within(panel).getByText(/Agent 2 finished the re-investigation/)).toHaveTextContent(
+    /ended without a diagnosis again/,
+  );
+  expect(within(panel).getByText(/Waiting for its request row/)).toBeInTheDocument();
 
   await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS));
   expect(caseReads).toBe(3);
-  expect(await screen.findByText(/shows up as a new request row/)).toBeInTheDocument();
+  expect(await within(panel).findByText(/Its request row is in the table/)).toBeInTheDocument();
 
   const requests = screen.getByRole("table", { name: /Requests/ });
-  expect(within(requests).getByText("Re-investigation")).toBeInTheDocument();
   expect(within(requests).getByText("requested by Dana")).toBeInTheDocument();
+  expect(within(requests).getByText("requested by Sam")).toBeInTheDocument();
 
-  // Found: no more reads.
+  // Both answered: no more reads.
   await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3));
   expect(caseReads).toBe(3);
+  expect(taskReads).toBe(2);
+});
+
+test.each([
+  ["a review limit", { refused: true, reason: "at most 5 review actions may run at once <b>wait</b>" }],
+  ["the approval claim", { approved: false, reason: "diagnosis 0123456789abcdef is already being approved <b>x</b>" }],
+])("Agent 2 refusing the started task (%s) shows its reason as text", async (_, refusal) => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  let taskReads = 0;
+  mockFetch((url, init) => {
+    if (init?.method === "POST") return { status: 202, body: { accepted: true, task_id: "t9" } };
+    if (url.startsWith("/api/review/tasks/t9")) {
+      taskReads += 1;
+      return {
+        status: 200,
+        body: { task_id: "t9", kind: "none", state: "TASK_STATE_FAILED", release: "v1_0_0", ...refusal },
+      };
+    }
+    if (url.startsWith("/api/review/")) return { status: 200, body: HELD };
+    if (url.startsWith("/api/cases/")) return { status: 200, body: caseWith([HELD_ROW]) };
+    return { status: 200, body: { cases: [] } };
+  });
+  const panel = await openPanel("Held for review");
+  await within(panel).findByText(/Why it was held/);
+  fireEvent.change(within(panel).getByLabelText("Your name"), { target: { value: "Dana" } });
+  fireEvent.click(within(panel).getByRole("button", { name: "Approve…" }));
+  fireEvent.click(within(panel).getByRole("button", { name: "Confirm approval" }));
+  await within(panel).findByText(/Agent 2 has the approval as task/);
+
+  await act(() => vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS));
+  const alert = within(panel).getByRole("alert");
+  expect(alert).toHaveTextContent(`Agent 2 refused the approval: ${refusal.reason}`);
+  expect(alert.querySelector("b")).toBeNull();
+
+  // A refusal is the answer: the task is not read again.
+  await act(() => vi.advanceTimersByTimeAsync(TASK_POLL_INTERVAL_MS * 3));
+  expect(taskReads).toBe(1);
+});
+
+test("Agent 2 not taking the action (502) says nothing was started and lets the reviewer try again", async () => {
+  const calls = mockFetch((url, init) => {
+    if (init?.method === "POST") return { status: 502, body: { error: "AGENT2_UNAVAILABLE" } };
+    if (url.startsWith("/api/review/")) return { status: 200, body: HELD };
+    if (url.startsWith("/api/cases/")) return { status: 200, body: caseWith([HELD_ROW]) };
+    return { status: 200, body: { cases: [] } };
+  });
+  const panel = await openPanel("Held for review");
+  await within(panel).findByText(/Why it was held/);
+  fireEvent.change(within(panel).getByLabelText("Your name"), { target: { value: "Dana" } });
+  fireEvent.click(within(panel).getByRole("button", { name: "Approve…" }));
+  fireEvent.click(within(panel).getByRole("button", { name: "Confirm approval" }));
+
+  expect(await within(panel).findByRole("alert")).toHaveTextContent(/Agent 2 did not take it, so nothing was started/);
+  expect(within(panel).getByRole("button", { name: "Confirm approval" })).toBeEnabled();
+  expect(screen.queryByText(/request row/)).toBeNull();
+  expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
 });
 
 function serveHeld(view: ReviewView) {
@@ -385,30 +467,22 @@ test("the reviewer name follows Agent 2's approver rule", () => {
   expect(reviewerProblem("a".repeat(65))).not.toBeNull();
 });
 
-test("the review function has its own base URL, and a trailing slash is ignored", async () => {
-  vi.stubEnv("VITE_AGENT2_REVIEW_API", "https://review.example.test/");
+test("the review routes are the gateway's, on its base URL", async () => {
+  vi.stubEnv("VITE_AGENT2_API", "https://agent2.example.test/");
   vi.resetModules();
   const api = await import("./api");
-  const calls = mockFetch(() => ({ status: 200, body: HELD }));
+  const calls = mockFetch((_, init) =>
+    init?.method === "POST" ? { status: 202, body: { accepted: true, task_id: "t9" } } : { status: 200, body: HELD },
+  );
 
   await api.getReview("t1", "v1_0_0");
-  await api.approve("t1", null, { reviewer: "Dana", marker: "0123456789abcdef", rank: 1 });
+  const started = await api.approve("t1", null, { reviewer: "Dana", marker: "0123456789abcdef", rank: 1 });
 
+  expect(started.task_id).toBe("t9");
   expect(calls.map((c) => c.url)).toEqual([
-    "https://review.example.test/api/review/tasks/t1?release=v1_0_0",
-    "https://review.example.test/api/review/tasks/t1/approve",
+    "https://agent2.example.test/api/review/tasks/t1?release=v1_0_0",
+    "https://agent2.example.test/api/review/tasks/t1/approve",
   ]);
-});
-
-test("a production build without the review URL says so instead of calling its own origin", async () => {
-  vi.stubEnv("DEV", false);
-  const calls = mockFetch((url) =>
-    url.startsWith("/api/cases/") ? { status: 200, body: caseWith([HELD_ROW]) } : { status: 200, body: { cases: [] } },
-  );
-  const panel = await openPanel("Held for review");
-
-  expect(within(panel).getByRole("alert")).toHaveTextContent(/VITE_AGENT2_REVIEW_API was not set/);
-  expect(calls.some((c) => c.url.includes("/api/review/"))).toBe(false);
 });
 
 // Every text in this tab comes from logs, model output or a ticket. None of it may become

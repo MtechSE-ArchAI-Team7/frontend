@@ -131,7 +131,7 @@ export interface QuarantinedEvidence {
   source_tool?: string | null;
   uri?: string | null;
   excerpt?: string | null;
-  // Detection reasons, when the review function sends them.
+  // Detection reasons, when the gateway sends them.
   reasons?: string[];
 }
 
@@ -166,11 +166,23 @@ export interface ReviewView {
   handoff_preview?: HandoffPreview[] | null;
   // The diagnosis was approved and delivered; Agent 2 refuses a second approval.
   already_approved?: boolean;
+  // A review action's own task that ended FAILED: Agent 2's refusal, from its status message
+  // ({"refused": true, "reason"} for its review limits, {"approved": false, "reason"} for an
+  // approval refused by the claim or the marker check).
+  refused?: boolean;
+  approved?: boolean;
+  reason?: string | null;
   // no_diagnosis / missing_fields
   needs?: ({ question?: string } | string)[];
   case_scope?: CaseScope | null;
   missing_fields?: string[];
   known_services?: string[];
+}
+
+// 202 from an action: the new task Agent 2 started for it.
+export interface ActionStarted {
+  accepted: boolean;
+  task_id?: string | null;
 }
 
 export interface ApproveBody {
