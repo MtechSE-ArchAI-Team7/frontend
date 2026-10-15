@@ -707,3 +707,172 @@
     grid-template-columns: minmax(150px, 45%) minmax(0, 1fr);
   }
 }
+
+/* ---------------------------------------------------------------- review panel */
+
+/* Under the span drawer (25), which opens over it without unmounting the form. */
+.agent2-root .drawer.review {
+  z-index: 24;
+  width: min(560px, 100vw);
+}
+.agent2-root .drawer.review:focus {
+  outline: none;
+}
+.agent2-root .drawer.review code {
+  padding: 1px 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--grid);
+  border-radius: 2px;
+}
+.agent2-root .drawer.review section,
+.agent2-root .review-form {
+  display: grid;
+  gap: 8px;
+}
+.agent2-root .review-badge {
+  display: block;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+.agent2-root .requests tr.fresh td {
+  background: var(--accent-wash);
+}
+.agent2-root .watch {
+  margin: 0;
+  color: var(--ink-2);
+}
+.agent2-root .notice {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--warning);
+}
+.agent2-root .handed {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--good);
+  background: var(--surface-2);
+}
+.agent2-root .plain-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.agent2-root .drawer.review fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.agent2-root .drawer.review legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.agent2-root .hypothesis {
+  display: flex;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.agent2-root .hypothesis.chosen {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.agent2-root .hypothesis-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  word-break: break-word;
+}
+.agent2-root .hypothesis-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.agent2-root .hypothesis-reasoning {
+  white-space: pre-wrap;
+}
+.agent2-root .quarantined {
+  margin: 0;
+  border: 1px solid var(--serious);
+  border-radius: 2px;
+}
+.agent2-root .quarantined figcaption {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  background: #fdf0ea;
+  color: var(--serious-ink);
+  word-break: break-word;
+}
+.agent2-root .quarantine-label {
+  font-size: 12px;
+}
+.agent2-root .excerpt {
+  margin: 0;
+  padding: 8px;
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+.agent2-root .field {
+  display: grid;
+  gap: 4px;
+}
+.agent2-root .field label {
+  font-weight: 700;
+  font-size: 12px;
+}
+.agent2-root .field input,
+.agent2-root .field textarea {
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+.agent2-root .field textarea {
+  resize: vertical;
+}
+.agent2-root .services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.agent2-root .check {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.agent2-root .window {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.agent2-root .confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+}
+.agent2-root .confirm p {
+  margin: 0;
+}
+.agent2-root .actions {
+  display: flex;
+  gap: 8px;
+}

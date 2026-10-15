@@ -1,16 +1,28 @@
 import { useEffect, useState } from "react";
 import { describeError, getCase } from "../api";
-import { count, duration, usd } from "../format";
+import { count, dateTime, duration, usd } from "../format";
+import { type Badge, POLL_DURATION_MS, POLL_INTERVAL_MS } from "../review";
 import { findSpan } from "../spans";
-import type { CaseView, SpanNode } from "../types";
+import type { CaseView, RequestRow, SpanNode } from "../types";
 import { AuditPanel } from "./AuditPanel";
 import { LogsPanel } from "./LogsPanel";
 import { Requests } from "./Requests";
+import { type ReviewAction, ReviewPanel } from "./ReviewPanel";
 import { SpanDetail } from "./SpanDetail";
 import { TimelinePanel } from "./TimelinePanel";
 import { Waterfall } from "./Waterfall";
 
 type Tab = "waterfall" | "timeline" | "audit" | "logs";
+
+// After a review action is handed over: the request rows already seen, and until when to
+// keep reading the case view for one that is not among them.
+interface Watch {
+  action: ReviewAction;
+  known: string[];
+  until: number;
+  found: RequestRow | null;
+  expired: boolean;
+}
 
 interface Props {
   caseId: string;
@@ -23,6 +35,8 @@ export function CaseDetail({ caseId, sinceHours }: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [tab, setTab] = useState<Tab>("waterfall");
   const [span, setSpan] = useState<SpanNode | null>(null);
+  const [review, setReview] = useState<{ row: RequestRow; badge: Badge } | null>(null);
+  const [watch, setWatch] = useState<Watch | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -40,6 +54,39 @@ export function CaseDetail({ caseId, sinceHours }: Props) {
       window.clearInterval(timer);
     };
   }, [caseId, sinceHours]);
+
+  useEffect(() => {
+    if (!watch || watch.found || watch.expired) return;
+    const controller = new AbortController();
+    const timer = window.setInterval(() => {
+      if (Date.now() > watch.until) {
+        setWatch((w) => w && { ...w, expired: true });
+        return;
+      }
+      getCase(caseId, sinceHours, controller.signal)
+        .then((next) => {
+          setView(next);
+          const fresh = next.requests.find((r) => !watch.known.includes(r.task_id));
+          if (fresh) setWatch((w) => w && { ...w, found: fresh });
+        })
+        // A failed read is tried again at the next tick; the page keeps what it showed.
+        .catch(() => undefined);
+    }, POLL_INTERVAL_MS);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [watch, caseId, sinceHours]);
+
+  const handedOver = (action: ReviewAction) => {
+    setWatch({
+      action,
+      known: view?.requests.map((r) => r.task_id) ?? [],
+      until: Date.now() + POLL_DURATION_MS,
+      found: null,
+      expired: false,
+    });
+  };
 
   if (error) {
     return (
@@ -100,7 +147,15 @@ export function CaseDetail({ caseId, sinceHours }: Props) {
             <Tile label="LLM cost" value={usd(totals.cost)} />
           </dl>
 
-          <Requests requests={view.requests} />
+          {watch && <WatchStatus watch={watch} />}
+          <Requests
+            requests={view.requests}
+            highlight={watch?.found?.task_id ?? null}
+            onReview={(row, badge) => {
+              setSpan(null);
+              setReview({ row, badge });
+            }}
+          />
 
           <div className="tabs" role="tablist">
             {tabs.map(([id, label]) => (
@@ -130,8 +185,46 @@ export function CaseDetail({ caseId, sinceHours }: Props) {
           </div>
         </>
       )}
+      {/* The span drawer opens over the review panel, which stays mounted so a half-filled
+          form survives a look at a span. */}
       {span && <SpanDetail span={span} onClose={() => setSpan(null)} />}
+      {review && (
+        <ReviewPanel
+          key={review.row.task_id}
+          row={review.row}
+          badge={review.badge}
+          caseId={caseId}
+          later={view.requests.filter((r) => r.first_seen > review.row.first_seen)}
+          onClose={() => setReview(null)}
+          onHandedOver={handedOver}
+        />
+      )}
     </section>
+  );
+}
+
+function WatchStatus({ watch }: { watch: Watch }) {
+  const what = watch.action === "approve" ? "approval" : "re-investigation";
+  if (watch.found) {
+    return (
+      <p className="watch" role="status">
+        The {what} shows up as a new request row, started {dateTime(watch.found.first_seen)}.
+      </p>
+    );
+  }
+  if (watch.expired) {
+    return (
+      <p className="watch" role="status">
+        No new request row for the {what} after {Math.round(POLL_DURATION_MS / 60_000)} min. Use Refresh later, or
+        look in Agent 2's logs for review_action_finished.
+      </p>
+    );
+  }
+  return (
+    <p className="watch" role="status">
+      Waiting for the {what} to show up as a new request row; reading the case again every {POLL_INTERVAL_MS / 1000}{" "}
+      s.
+    </p>
   );
 }
 
