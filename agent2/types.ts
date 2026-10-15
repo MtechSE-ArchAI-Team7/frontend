@@ -23,13 +23,16 @@ export interface Brief {
 
 export interface RequestRow {
   task_id: string;
-  kind: "investigation" | "approval";
+  // "reinvestigation": a person asked for this run from the review panel, named in
+  // requested_by (diagnosis-agent log-ui/backend/timeline.py).
+  kind: "investigation" | "approval" | "reinvestigation";
   first_seen: string;
   last_seen: string;
   outcome: Brief | null;
   delivery: Brief | null;
   jira: Brief | null;
   release?: string | null;
+  requested_by?: string | null;
   warnings: number;
 }
 
@@ -106,4 +109,66 @@ export interface CaseView {
   traces: Trace[];
   audit: AuditSection;
   timeline: TimelineEntry[];
+}
+
+// Mirrors diagnosis-agent log-ui/review/review.py::view. Every string here is text to show
+// as text: hypotheses are model output, excerpts and ticket text were written by whoever
+// controls their source.
+
+export type ReviewKind = "held" | "no_diagnosis" | "missing_fields" | "working" | "none";
+
+export interface Hypothesis {
+  rank: number;
+  category?: string | null;
+  root_cause?: string | null;
+  evidence_strength?: number | null;
+  reasoning?: string | null;
+  evidence_refs?: string[];
+}
+
+export interface QuarantinedEvidence {
+  evidence_id?: string | null;
+  source_tool?: string | null;
+  uri?: string | null;
+  excerpt?: string | null;
+  // Detection reasons, when the review function sends them.
+  reasons?: string[];
+}
+
+export interface CaseScope {
+  affected_services?: string[];
+  time_window?: { start?: string; end?: string } | null;
+}
+
+export interface ReviewView {
+  task_id: string | null;
+  kind: ReviewKind;
+  state: string | null;
+  release: string | null;
+  case_id?: string | null;
+  // held
+  marker?: string;
+  hypotheses?: Hypothesis[];
+  quarantined?: QuarantinedEvidence[];
+  limitations?: string[];
+  advisories?: string[];
+  // no_diagnosis / missing_fields
+  needs?: ({ question?: string } | string)[];
+  case_scope?: CaseScope | null;
+  missing_fields?: string[];
+  known_services?: string[];
+}
+
+export interface ApproveBody {
+  reviewer: string;
+  marker: string;
+  rank: number;
+}
+
+export interface ReinvestigateBody {
+  reviewer: string;
+  affected_services: string[];
+  time_window: { start: string; end: string };
+  context?: string;
+  case_id?: string;
 }
