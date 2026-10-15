@@ -135,6 +135,16 @@ export interface QuarantinedEvidence {
   reasons?: string[];
 }
 
+// Agent 2's dry run of an approval for one rank (diagnosis-agent log-ui/review/review.py
+// preview_from). handoff is the DiagnosisHandoffV1 it would send, built as approved by the
+// placeholder "reviewer"; null when it would not send this rank, with the reason.
+export interface HandoffPreview {
+  rank: number;
+  handoff: Record<string, unknown> | null;
+  reason: string | null;
+  already_claimed: boolean | null;
+}
+
 export interface CaseScope {
   affected_services?: string[];
   time_window?: { start?: string; end?: string } | null;
@@ -152,6 +162,10 @@ export interface ReviewView {
   quarantined?: QuarantinedEvidence[];
   limitations?: string[];
   advisories?: string[];
+  // null when Agent 2 gave no preview at all; a rank missing from the list got no answer.
+  handoff_preview?: HandoffPreview[] | null;
+  // The diagnosis was approved and delivered; Agent 2 refuses a second approval.
+  already_approved?: boolean;
   // no_diagnosis / missing_fields
   needs?: ({ question?: string } | string)[];
   case_scope?: CaseScope | null;

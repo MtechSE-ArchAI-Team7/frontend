@@ -59,6 +59,20 @@ const HELD: ReviewView = {
   ],
   limitations: [`description_raw_flagged: ${PLANTED}`],
   advisories: [],
+  handoff_preview: [
+    {
+      rank: 1,
+      handoff: {
+        jira_ticket_id: "AH-39",
+        issue_summary: `<b>Checkout down</b> ${PLANTED}`,
+        upstream_audit_refs: ["human-approved-by:reviewer", "steering-held"],
+      },
+      reason: null,
+      already_claimed: false,
+    },
+    { rank: 2, handoff: null, reason: "hypothesis 2 names no repository Agent 3 can open", already_claimed: false },
+  ],
+  already_approved: false,
 };
 
 const NO_DIAGNOSIS: ReviewView = {
@@ -296,6 +310,60 @@ test("after handing over, the case view is read every 10 s until the new request
   // Found: no more reads.
   await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3));
   expect(caseReads).toBe(3);
+});
+
+function serveHeld(view: ReviewView) {
+  return mockFetch((url) => {
+    if (url.startsWith("/api/review/")) return { status: 200, body: view };
+    if (url.startsWith("/api/cases/")) return { status: 200, body: caseWith([HELD_ROW]) };
+    return { status: 200, body: { cases: [] } };
+  });
+}
+
+test("the handoff preview follows the chosen rank and is shown as text", async () => {
+  serveHeld(HELD);
+  const panel = await openPanel("Held for review");
+
+  const heading = await within(panel).findByRole("heading", { name: "What Agent 3 would receive (rank 1)" });
+  const section = heading.closest("section")!;
+  const pre = section.querySelector("pre");
+  expect(pre).not.toBeNull();
+  expect(pre!.textContent).toBe(JSON.stringify(HELD.handoff_preview![0].handoff, null, 2));
+  expect(pre!.textContent).toContain("<b>Checkout down</b>");
+  expect(section.querySelector("b, img, a")).toBeNull();
+  expect(within(section).getByText(/human-approved-by:reviewer\. On a real approval that becomes your name/)).toBeInTheDocument();
+
+  // A rank Agent 2 would not send shows why, not an error.
+  fireEvent.click(within(panel).getByRole("radio", { name: /Rank 2/ }));
+  const rank2 = within(panel).getByRole("heading", { name: "What Agent 3 would receive (rank 2)" }).closest("section")!;
+  expect(within(rank2).getByText(/Agent 2 would not send rank 2: hypothesis 2 names no repository/)).toBeInTheDocument();
+  expect(rank2.querySelector("pre")).toBeNull();
+  expect(within(panel).queryByRole("alert")).toBeNull();
+});
+
+test("no preview from Agent 2, or none for a rank, still shows the diagnosis", async () => {
+  serveHeld({ ...HELD, handoff_preview: null });
+  let panel = await openPanel("Held for review");
+  expect(await within(panel).findByText(/No preview yet/)).toBeInTheDocument();
+  expect(within(panel).getByRole("radio", { name: /Rank 1/ })).toBeChecked();
+  cleanup();
+
+  serveHeld({ ...HELD, handoff_preview: [HELD.handoff_preview![1]] });
+  panel = await openPanel("Held for review");
+  expect(await within(panel).findByText("Agent 2 did not answer for rank 1.")).toBeInTheDocument();
+});
+
+test("an already approved diagnosis says so and cannot be approved again", async () => {
+  const calls = serveHeld({ ...HELD, already_approved: true });
+  const panel = await openPanel("Held for review");
+
+  expect(await within(panel).findByText(/Already approved/)).toHaveTextContent(/cannot be approved again/);
+  expect(within(panel).getByLabelText("Your name")).toBeDisabled();
+  const next = within(panel).getByRole("button", { name: "Approve…" });
+  expect(next).toBeDisabled();
+  fireEvent.click(next);
+  expect(within(panel).queryByRole("group", { name: "Confirm approval" })).toBeNull();
+  expect(calls.some((c) => c.method === "POST")).toBe(false);
 });
 
 test("only held and no-diagnosis requests get a badge", () => {
