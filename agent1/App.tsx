@@ -76,8 +76,8 @@ export default function Agent1App({ active }: { active: boolean }) {
         <div className="agent1-gate">
           <section className="agent1-gate-card agent1-config-card" aria-labelledby="agent1-config-title">
             <span className="agent1-kicker">Operator data source</span>
-            <h1 id="agent1-config-title">Agent 1 gateway is not configured</h1>
-            <p>Set <code>VITE_AGENT1_API</code> to the Agent 1 CloudWatch gateway URL and rebuild this UI. No run status is inferred or fabricated.</p>
+            <h1 id="agent1-config-title">Helpdesk Agent gateway is not configured</h1>
+            <p>Set <code>VITE_AGENT1_API</code> to the Helpdesk Agent CloudWatch gateway URL and rebuild this UI. No run status is inferred or fabricated.</p>
           </section>
         </div>
       ) : (
@@ -215,7 +215,7 @@ function Console({ active }: { active: boolean }) {
       <header className="agent1-header">
         <div>
           <span className="agent1-kicker">Service operations · Read only</span>
-          <h1>Agent 1 · Helpdesk operations</h1>
+          <h1>Helpdesk Agent · Helpdesk operations</h1>
           <p>Track intake, triage decisions, ticket actions, and escalation evidence.</p>
         </div>
         <div className="agent1-header-actions">

@@ -8,10 +8,10 @@ import Agent4App from "../agent4/App";
 const AGENT1_HASH_PREFIX = "#/agent1/";
 
 const AGENTS = [
-  { id: "agent1", label: "Agent 1" },
-  { id: "agent2", label: "Agent 2" },
-  { id: "agent3", label: "Agent 3" },
-  { id: "agent4", label: "Agent 4" },
+  { id: "agent1", label: "Helpdesk Agent" },
+  { id: "agent2", label: "Diagnosis Agent" },
+  { id: "agent3", label: "Remediation Agent" },
+  { id: "agent4", label: "Verification Agent" },
 ] as const;
 
 export type AgentId = (typeof AGENTS)[number]["id"];

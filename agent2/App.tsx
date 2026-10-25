@@ -77,7 +77,7 @@ function Shell({ active }: { active: boolean }) {
   return (
     <div className="shell">
       <header className="topbar">
-        <h1>Agent 2 logs</h1>
+        <h1>Diagnosis Agent logs</h1>
         <p className="topbar-sub">Container logs, spans and audit, joined per case</p>
         <div className="topbar-actions">
           <label className="range">

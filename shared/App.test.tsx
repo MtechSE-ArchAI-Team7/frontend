@@ -14,15 +14,15 @@ describe("shared agent shell", () => {
     vi.unstubAllGlobals();
   });
 
-  it("selects Agent 3 by default and preserves its console", () => {
+  it("selects Remediation Agent by default and preserves its console", () => {
     render(<App />);
 
-    expect(screen.getByRole("tab", { name: /^Agent 3$/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /^Remediation Agent$/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Runs" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 
-  it.each(["Agent 1"])(`shows the operator workspace for %s without an application token`, async (label) => {
+  it.each(["Helpdesk Agent"])(`shows the operator workspace for %s without an application token`, async (label) => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       status: 200,
@@ -41,17 +41,17 @@ describe("shared agent shell", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
-  it("does not mount Agent 4, or call its receiver, until its tab is first opened", () => {
+  it("does not mount Verification Agent, or call its receiver, until its tab is first opened", () => {
     render(<App />);
     const agent4Calls = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/runs.json"));
     expect(agent4Calls()).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 4$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Verification Agent$/ }));
     expect(agent4Calls()).toHaveLength(1);
     expect(String(agent4Calls()[0][0])).toMatch(/\/runs\.json$/);
   });
 
-  it("shows Agent 4's runs console in its own tab and keeps it mounted", async () => {
+  it("shows Verification Agent's runs console in its own tab and keeps it mounted", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       status: 200,
@@ -59,39 +59,39 @@ describe("shared agent shell", () => {
     } as Response);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 4$/ }));
-    expect(screen.getByRole("tab", { name: /^Agent 4$/ })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: /^Verification Agent$/ }));
+    expect(screen.getByRole("tab", { name: /^Verification Agent$/ })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("heading", { name: "Post-merge runs" })).toBeVisible();
     expect(screen.getByText(/No runs recorded yet/)).toBeInTheDocument();
 
     // stays mounted (state preserved) while another tab is selected
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 3$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Remediation Agent$/ }));
     expect(screen.getByRole("heading", { name: "Post-merge runs", hidden: true })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 4$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Verification Agent$/ }));
     expect(screen.getByRole("heading", { name: "Post-merge runs" })).toBeVisible();
     expect(screen.getByText(/No runs recorded yet/)).toBeInTheDocument();
   });
 
   it("supports keyboard navigation across agent tabs", () => {
     render(<App />);
-    const agent3 = screen.getByRole("tab", { name: /^Agent 3$/ });
+    const remediationAgent = screen.getByRole("tab", { name: /^Remediation Agent$/ });
 
-    agent3.focus();
-    fireEvent.keyDown(agent3, { key: "ArrowRight" });
-    expect(screen.getByRole("tab", { name: /^Agent 4$/ })).toHaveFocus();
-    expect(screen.getByRole("tab", { name: /^Agent 4$/ })).toHaveAttribute("aria-selected", "true");
+    remediationAgent.focus();
+    fireEvent.keyDown(remediationAgent, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: /^Verification Agent$/ })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: /^Verification Agent$/ })).toHaveAttribute("aria-selected", "true");
 
-    fireEvent.keyDown(screen.getByRole("tab", { name: /^Agent 4$/ }), { key: "Home" });
-    expect(screen.getByRole("tab", { name: /^Agent 1$/ })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("tab", { name: /^Verification Agent$/ }), { key: "Home" });
+    expect(screen.getByRole("tab", { name: /^Helpdesk Agent$/ })).toHaveFocus();
   });
 
-  it("keeps Agent 3 state mounted while another workspace is selected", () => {
+  it("keeps Remediation Agent state mounted while another workspace is selected", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("tab", { name: /^Agent$/ }));
     expect(screen.getByText("Tool and policy boundary")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 1$/ }));
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 3$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Helpdesk Agent$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Remediation Agent$/ }));
 
     expect(screen.getByText("Tool and policy boundary")).toBeVisible();
     expect(screen.getByRole("tab", { name: /^Agent$/ })).toHaveAttribute("aria-selected", "true");
@@ -108,39 +108,39 @@ describe("shared agent shell", () => {
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
   });
 
-  it("does not mount Agent 2, or call its gateway, until its tab is first opened", () => {
+  it("does not mount Diagnosis Agent, or call its gateway, until its tab is first opened", () => {
     render(<App />);
     const agent2Calls = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/api/cases"));
     expect(agent2Calls()).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 2$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Diagnosis Agent$/ }));
     expect(agent2Calls()).toHaveLength(1);
     expect(String(agent2Calls()[0][0])).toMatch(/\/api\/cases\?since_hours=24$/);
   });
 
-  it("shows Agent 2's logs in its own tab, with no token gate, and keeps Agent 3 untouched", () => {
+  it("shows Diagnosis Agent's logs in its own tab, with no token gate, and keeps Remediation Agent untouched", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 2$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Diagnosis Agent$/ }));
 
-    expect(screen.getByRole("tab", { name: /^Agent 2$/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: "Agent 2 logs" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: /^Diagnosis Agent$/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Diagnosis Agent logs" })).toBeVisible();
     expect(screen.queryByLabelText("Access token")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Runs", hidden: true })).not.toBeVisible();
 
-    fireEvent.click(screen.getByRole("tab", { name: /^Agent 3$/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Remediation Agent$/ }));
     expect(screen.getByRole("heading", { name: "Recent runs" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Agent 2 logs", hidden: true })).not.toBeVisible();
+    expect(screen.getByRole("heading", { name: "Diagnosis Agent logs", hidden: true })).not.toBeVisible();
   });
 
-  it("opens on Agent 2 for a case link, and leaves Agent 3 the default otherwise", () => {
+  it("opens on Diagnosis Agent for a case link, and leaves Remediation Agent the default otherwise", () => {
     window.location.hash = "#/agent2/AH-39";
     const { unmount } = render(<App />);
-    expect(screen.getByRole("tab", { name: /^Agent 2$/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /^Diagnosis Agent$/ })).toHaveAttribute("aria-selected", "true");
     unmount();
 
     window.location.hash = "#runs";
     render(<App />);
-    expect(screen.getByRole("tab", { name: /^Agent 3$/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /^Remediation Agent$/ })).toHaveAttribute("aria-selected", "true");
     window.location.hash = "";
   });
 });
